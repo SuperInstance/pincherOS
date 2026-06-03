@@ -1,0 +1,699 @@
+//! Reflex engine — the heart of PincherOS
+//!
+//! The ReflexEngine coordinates intent matching, reflex execution,
+//! confidence tracking, and the teach/learn cycle.
+
+use crate::db::schema::{self, ReflexRow};
+use crate::embed::Embedder;
+use crate::reflex::matcher::{match_reflex, MatchResult};
+use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
+use std::time::Instant;
+use thiserror::Error;
+use tracing::{debug, info, instrument, warn};
+
+/// Reflex engine errors.
+#[derive(Debug, Error)]
+pub enum EngineError {
+    #[error("Database error: {0}")]
+    Db(#[from] rusqlite::Error),
+
+    #[error("Embedding error: {0}")]
+    Embed(#[from] crate::embed::EmbedError),
+
+    #[error("Match error: {0}")]
+    Match(#[from] crate::reflex::matcher::MatchError),
+
+    #[error("Execution error: {0}")]
+    Execution(String),
+
+    #[error("Reflex not found: {0}")]
+    ReflexNotFound(String),
+
+    #[error("Vetoed: {0}")]
+    Vetoed(String),
+
+    #[error("Resource constraint: {0}")]
+    ResourceConstraint(String),
+}
+
+/// Result type for engine operations.
+pub type EngineResult<T> = Result<T, EngineError>;
+
+/// A learned reflex with its metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Reflex {
+    pub id: String,
+    pub intent: String,
+    pub action: String,
+    pub confidence: f64,
+    pub invoke_count: i64,
+}
+
+impl From<ReflexRow> for Reflex {
+    fn from(row: ReflexRow) -> Self {
+        Reflex {
+            id: row.id,
+            intent: row.intent,
+            action: row.action_sql,
+            confidence: row.confidence,
+            invoke_count: row.invoke_count,
+        }
+    }
+}
+
+/// The result of executing a reflex or processing an intent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Execution {
+    pub output: String,
+    pub latency_ms: i64,
+    pub confidence: f64,
+    pub match_type: MatchType,
+    pub reflex_id: Option<String>,
+    pub intent: String,
+}
+
+/// How an intent was matched to a reflex.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MatchType {
+    Exact,
+    Similar,
+    Novel,
+    Builtin,
+}
+
+impl std::fmt::Display for MatchType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MatchType::Exact => write!(f, "exact"),
+            MatchType::Similar => write!(f, "similar"),
+            MatchType::Novel => write!(f, "novel"),
+            MatchType::Builtin => write!(f, "builtin"),
+        }
+    }
+}
+
+/// Confidence update delegates to the proper multiplicative model in confidence.rs.
+/// See [`crate::reflex::confidence::update_confidence`] for details.
+fn update_confidence(current: f64, success: bool) -> f64 {
+    crate::reflex::confidence::update_confidence(current, success)
+}
+
+/// Built-in reflex dispatch table.
+fn dispatch_builtin(intent: &str, action: &str, input: &str) -> EngineResult<String> {
+    match intent {
+        "system.info" => builtin_system_info(),
+        "file.read" => builtin_file_read(action, input),
+        "file.write" => builtin_file_write(action, input),
+        "process.list" => builtin_process_list(),
+        "process.kill" => builtin_process_kill(action, input),
+        "network.ping" => builtin_network_ping(action, input),
+        "git.status" => builtin_git_status(action, input),
+        "git.diff" => builtin_git_diff(action, input),
+        "docker.ps" => builtin_docker_ps(),
+        "env.get" => builtin_env_get(action, input),
+        _ => Err(EngineError::Execution(format!(
+            "Unknown built-in reflex: {}",
+            intent
+        ))),
+    }
+}
+
+/// The main reflex engine.
+pub struct ReflexEngine {
+    conn: Connection,
+    embedder: Embedder,
+}
+
+impl ReflexEngine {
+    /// Create a new ReflexEngine with the given database connection and embedder.
+    pub fn new(conn: Connection, embedder: Embedder) -> Self {
+        Self {
+            conn,
+            embedder,
+        }
+    }
+
+    /// Create a new ReflexEngine by opening the database at the given path.
+    pub fn open(db_path: &std::path::Path, model_path: Option<&std::path::Path>) -> EngineResult<Self> {
+        let conn = schema::init_db(db_path)?;
+        let embedder = Embedder::new(model_path)?;
+
+        let engine = Self {
+            conn,
+            embedder,
+        };
+
+        // Seed embeddings for built-in reflexes (non-fatal)
+        // We can't access conn after moving it, so we'll skip this for now
+        // In a real implementation, we'd pass the conn separately or use interior mutability
+
+        Ok(engine)
+    }
+
+    /// Teach the engine a new reflex.
+    #[instrument(skip(self, action))]
+    pub fn teach(&mut self, intent: &str, action: &str) -> EngineResult<Reflex> {
+        info!(intent = intent, "Teaching new reflex");
+
+        if let Some(existing) = schema::get_reflex_by_intent(&self.conn, intent)? {
+            info!(
+                intent = intent,
+                existing_id = %existing.id,
+                "Reflex with this intent already exists — updating"
+            );
+
+            let embedding = self.embedder.embed(intent)?;
+            schema::update_reflex_embedding(&self.conn, &existing.id, &embedding)?;
+
+            return Ok(Reflex::from(existing));
+        }
+
+        let embedding = self.embedder.embed(intent)?;
+        let id = uuid::Uuid::new_v4().to_string();
+
+        schema::insert_reflex(&self.conn, &id, intent, action, &embedding, 0.5)?;
+
+        info!(reflex_id = id, intent = intent, "New reflex taught successfully");
+
+        Ok(Reflex {
+            id,
+            intent: intent.to_string(),
+            action: action.to_string(),
+            confidence: 0.5,
+            invoke_count: 0,
+        })
+    }
+
+    /// Process a command intent through the reflex engine.
+    #[instrument(skip(self))]
+    pub fn do_command(&mut self, intent: &str) -> EngineResult<Execution> {
+        info!(intent = intent, "Processing command");
+        let start = Instant::now();
+
+        let match_result = match_reflex(&self.conn, &self.embedder, intent)?;
+
+        let execution = match match_result {
+            MatchResult::Exact { similarity, reflex } => {
+                info!(
+                    intent = intent,
+                    similarity = similarity,
+                    reflex_id = %reflex.id,
+                    "Exact match — short-circuiting to reflex execution"
+                );
+
+                self.execute_reflex(&reflex, intent, MatchType::Exact)?
+            }
+
+            MatchResult::Similar { similarity, reflex } => {
+                info!(
+                    intent = intent,
+                    similarity = similarity,
+                    reflex_id = %reflex.id,
+                    "Similar match — executing with potential LLM refinement"
+                );
+
+                let mut exec = self.execute_reflex(&reflex, intent, MatchType::Similar)?;
+                exec.output = format!(
+                    "[SIMILAR MATCH: {:.2}%] {}\n---\nThis response may need LLM refinement.",
+                    similarity * 100.0,
+                    exec.output
+                );
+                exec
+            }
+
+            MatchResult::Novel { best_similarity } => {
+                info!(
+                    intent = intent,
+                    best_similarity = best_similarity,
+                    "Novel intent — no matching reflex found"
+                );
+
+                Execution {
+                    output: format!(
+                        "[NOVEL INTENT] No matching reflex found (best similarity: {:.2}%).",
+                        best_similarity * 100.0,
+                    ),
+                    latency_ms: start.elapsed().as_millis() as i64,
+                    confidence: best_similarity as f64,
+                    match_type: MatchType::Novel,
+                    reflex_id: None,
+                    intent: intent.to_string(),
+                }
+            }
+        };
+
+        Ok(execution)
+    }
+
+    /// Execute a specific reflex.
+    #[instrument(skip(self, reflex))]
+    pub fn execute(&mut self, reflex: &Reflex, input: &str) -> EngineResult<Execution> {
+        let start = Instant::now();
+
+        // SECURITY: Run veto check before any execution
+        let action_to_check = if is_builtin_intent(&reflex.intent) {
+            &reflex.intent
+        } else {
+            &reflex.action
+        };
+        let veto_context = crate::security::veto::ExecutionContext::for_command(action_to_check);
+        let veto_engine = crate::security::veto::VetoEngine::default();
+        let veto_result = veto_engine.check(action_to_check, &veto_context)
+            .map_err(|e| EngineError::Vetoed(format!("Veto check failed: {}", e)))?;
+        if !veto_result.is_allowed() {
+            return Err(EngineError::Vetoed(format!("Action blocked by veto engine: {:?}", veto_result)));
+        }
+
+        let is_builtin = is_builtin_intent(&reflex.intent);
+
+        let output = if is_builtin {
+            dispatch_builtin(&reflex.intent, &reflex.action, input)?
+        } else {
+            self.execute_action_sql(&reflex.action, input)?
+        };
+
+        let latency_ms = start.elapsed().as_millis() as i64;
+
+        schema::increment_reflex_invoke(&self.conn, &reflex.id)?;
+        self.confidence_update(&reflex.id, true)?;
+
+        schema::log_action(
+            &self.conn,
+            &reflex.id,
+            input,
+            &output,
+            latency_ms,
+            reflex.confidence,
+        )?;
+
+        Ok(Execution {
+            output,
+            latency_ms,
+            confidence: reflex.confidence,
+            match_type: if is_builtin {
+                MatchType::Builtin
+            } else {
+                MatchType::Exact
+            },
+            reflex_id: Some(reflex.id.clone()),
+            intent: reflex.intent.clone(),
+        })
+    }
+
+    /// Execute a reflex row (internal helper).
+    fn execute_reflex(
+        &mut self,
+        reflex: &ReflexRow,
+        input: &str,
+        match_type: MatchType,
+    ) -> EngineResult<Execution> {
+        let start = Instant::now();
+
+        // SECURITY: Run veto check before any execution
+        let action_to_check = if is_builtin_intent(&reflex.intent) {
+            &reflex.intent
+        } else {
+            &reflex.action_sql
+        };
+        let veto_context = crate::security::veto::ExecutionContext::for_command(action_to_check);
+        let veto_engine = crate::security::veto::VetoEngine::default();
+        let veto_result = veto_engine.check(action_to_check, &veto_context)
+            .map_err(|e| EngineError::Vetoed(format!("Veto check failed: {}", e)))?;
+        if !veto_result.is_allowed() {
+            return Err(EngineError::Vetoed(format!("Action blocked by veto engine: {:?}", veto_result)));
+        }
+
+        let is_builtin = is_builtin_intent(&reflex.intent);
+
+        let output = if is_builtin {
+            dispatch_builtin(&reflex.intent, &reflex.action_sql, input)?
+        } else {
+            self.execute_action_sql(&reflex.action_sql, input)?
+        };
+
+        let latency_ms = start.elapsed().as_millis() as i64;
+
+        schema::increment_reflex_invoke(&self.conn, &reflex.id)?;
+
+        schema::log_action(
+            &self.conn,
+            &reflex.id,
+            input,
+            &output,
+            latency_ms,
+            reflex.confidence,
+        )?;
+
+        Ok(Execution {
+            output,
+            latency_ms,
+            confidence: reflex.confidence,
+            match_type,
+            reflex_id: Some(reflex.id.clone()),
+            intent: reflex.intent.clone(),
+        })
+    }
+
+    /// Execute an action SQL string.
+    ///
+    /// SECURITY: Dynamic SQL interpolation via `{{input}}` is **prohibited**.
+    /// Only static SELECT queries (no template variables) are allowed.
+    /// Shell execution via `sh -c` is **prohibited** — all non-SQL actions
+    /// must go through the builtin dispatch or the sandboxed executor.
+    fn execute_action_sql(&self, action_sql: &str, input: &str) -> EngineResult<String> {
+        debug!(action_sql = action_sql, "Executing action SQL");
+
+        // SECURITY: Reject any action that interpolates user input into SQL or shell.
+        if action_sql.contains("{{input}}") || action_sql.contains("{{") {
+            return Err(EngineError::Execution(
+                "Dynamic SQL/shell interpolation is prohibited. Use parameterized builtins instead.".into()
+            ));
+        }
+
+        // Only allow static SELECT queries (no user input)
+        if action_sql.starts_with("SELECT") {
+            match self.conn.query_row(action_sql, [], |row| {
+                row.get::<_, String>(0)
+            }) {
+                Ok(result) => Ok(result),
+                Err(e) => {
+                    debug!(error = %e, "SQL execution failed — returning raw action");
+                    Ok(format!("Action: {}", action_sql))
+                }
+            }
+        } else {
+            // Non-SELECT, non-builtin actions must be routed through the sandbox.
+            // Direct shell execution is prohibited.
+            Err(EngineError::Execution(
+                "Shell execution via sh -c is prohibited. Route through builtin dispatch or sandbox.".into()
+            ))
+        }
+    }
+
+    /// Update a reflex's confidence: +0.05 on success, -0.10 on failure, clamped to [0.0, 1.0].
+    #[instrument(skip(self))]
+    pub fn confidence_update(&mut self, reflex_id: &str, success: bool) -> EngineResult<()> {
+        let reflex = schema::get_reflex_by_id(&self.conn, reflex_id)?
+            .ok_or_else(|| EngineError::ReflexNotFound(reflex_id.to_string()))?;
+
+        let new_confidence = update_confidence(reflex.confidence, success);
+
+        debug!(
+            reflex_id = reflex_id,
+            old_confidence = reflex.confidence,
+            new_confidence = new_confidence,
+            success = success,
+            "Updated reflex confidence"
+        );
+
+        schema::update_reflex_confidence(&self.conn, reflex_id, new_confidence)?;
+        Ok(())
+    }
+
+    /// Get the database connection reference.
+    pub fn connection(&self) -> &Connection {
+        &self.conn
+    }
+
+    /// Get the embedder reference.
+    pub fn embedder(&self) -> &Embedder {
+        &self.embedder
+    }
+
+    /// Get status information about the engine.
+    pub fn get_status(&self) -> EngineResult<EngineStatus> {
+        let reflex_count = schema::get_reflex_count(&self.conn)?;
+        let action_count = schema::get_action_log_count(&self.conn)?;
+
+        Ok(EngineStatus {
+            reflex_count,
+            action_log_count: action_count,
+            embedder_loaded: self.embedder.is_loaded(),
+        })
+    }
+}
+
+/// Engine status summary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EngineStatus {
+    pub reflex_count: i64,
+    pub action_log_count: i64,
+    pub embedder_loaded: bool,
+}
+
+/// Check if an intent corresponds to a built-in reflex.
+fn is_builtin_intent(intent: &str) -> bool {
+    matches!(
+        intent,
+        "system.info"
+            | "file.read"
+            | "file.write"
+            | "process.list"
+            | "process.kill"
+            | "network.ping"
+            | "git.status"
+            | "git.diff"
+            | "docker.ps"
+            | "env.get"
+    )
+}
+
+// ── Built-in Reflex Implementations ──────────────────────────────────
+
+fn builtin_system_info() -> EngineResult<String> {
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let info = serde_json::json!({
+        "hostname": System::host_name().unwrap_or_default(),
+        "os": System::name().unwrap_or_default(),
+        "os_version": System::os_version().unwrap_or_default(),
+        "cpu_count": sys.cpus().len(),
+        "ram_total_mb": sys.total_memory() / 1024 / 1024,
+        "ram_used_mb": sys.used_memory() / 1024 / 1024,
+        "uptime_secs": System::uptime(),
+    });
+
+    Ok(serde_json::to_string_pretty(&info)
+        .unwrap_or_else(|_| format!("{:?}", info)))
+}
+
+fn builtin_file_read(action: &str, input: &str) -> EngineResult<String> {
+    let path = extract_template_var(action, "path")
+        .unwrap_or_else(|| input.to_string());
+
+    // SECURITY: Validate path against traversal and sensitive locations
+    let canonical = std::path::Path::new(&path).canonicalize().map_err(|e| {
+        EngineError::Execution(format!("Path resolution failed for '{}': {}", path, e))
+    })?;
+
+    let path_str = canonical.to_string_lossy();
+
+    // Block sensitive paths
+    const BLOCKED_PREFIXES: &[&str] = &[
+        "/etc/shadow", "/etc/ssh", "/root/.ssh", "/proc/self/environ",
+        "/etc/gshadow", "/etc/passwd-", "/etc/shadow-",
+    ];
+    for prefix in BLOCKED_PREFIXES {
+        if path_str.starts_with(prefix) {
+            return Err(EngineError::Execution(
+                format!("Access to '{}' is forbidden by security policy", prefix)
+            ));
+        }
+    }
+
+    let content = std::fs::read_to_string(&canonical).map_err(|e| {
+        EngineError::Execution(format!("Failed to read file '{}': {}", path, e))
+    })?;
+
+    Ok(content)
+}
+
+fn builtin_file_write(action: &str, input: &str) -> EngineResult<String> {
+    let path = extract_template_var(action, "path")
+        .unwrap_or_else(|| "output.txt".to_string());
+
+    let content = extract_template_var(action, "content")
+        .unwrap_or_else(|| input.to_string());
+
+    // SECURITY: Restrict writes to safe directories only
+    let parent = std::path::Path::new(&path).parent().unwrap_or(std::path::Path::new("."));
+    let canonical_dir = parent.canonicalize().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let dir_str = canonical_dir.to_string_lossy();
+
+    const SAFE_DIRS: &[&str] = &["/tmp", "/var/tmp"];
+    if !SAFE_DIRS.iter().any(|d| dir_str.starts_with(d)) && !path.starts_with("./") && !path.starts_with("output") {
+        return Err(EngineError::Execution(
+            "File writes are restricted to /tmp, /var/tmp, and relative paths".into()
+        ));
+    }
+
+    std::fs::write(&path, content).map_err(|e| {
+        EngineError::Execution(format!("Failed to write file '{}': {}", path, e))
+    })?;
+
+    Ok(format!("Successfully wrote to {}", path))
+}
+
+fn builtin_process_list() -> EngineResult<String> {
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let mut processes: Vec<_> = sys
+        .processes()
+        .iter()
+        .map(|(pid, proc_info)| {
+            serde_json::json!({
+                "pid": pid.as_u32(),
+                "name": proc_info.name().to_string_lossy(),
+                "cpu_usage": format!("{:.1}%", proc_info.cpu_usage()),
+                "memory_mb": proc_info.memory() / 1024 / 1024,
+            })
+        })
+        .collect();
+
+    processes.truncate(20);
+
+    Ok(serde_json::to_string_pretty(&processes)
+        .unwrap_or_else(|_| "No processes found".to_string()))
+}
+
+fn builtin_process_kill(action: &str, input: &str) -> EngineResult<String> {
+    let pid_str = extract_template_var(action, "pid")
+        .unwrap_or_else(|| input.to_string());
+
+    let pid: u32 = pid_str.trim().parse().map_err(|_| {
+        EngineError::Execution(format!("Invalid PID: '{}'", pid_str))
+    })?;
+
+    // SECURITY: Block killing system processes and self
+    let self_pid = std::process::id();
+    if pid <= 100 {
+        return Err(EngineError::Execution(
+            format!("Cannot kill system process (PID {} <= 100)", pid)
+        ));
+    }
+    if pid == self_pid {
+        return Err(EngineError::Execution(
+            "Cannot kill self (PincherOS process)".into()
+        ));
+    }
+
+    use sysinfo::{Pid, System};
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let pid_obj = Pid::from_u32(pid);
+    if let Some(process) = sys.process(pid_obj) {
+        process.kill();
+        Ok(format!("Killed process {} ({})", pid, process.name().to_string_lossy()))
+    } else {
+        Err(EngineError::Execution(format!("Process {} not found", pid)))
+    }
+}
+
+fn builtin_network_ping(action: &str, input: &str) -> EngineResult<String> {
+    let host = extract_template_var(action, "host")
+        .unwrap_or_else(|| input.to_string());
+
+    let timeout = extract_template_var(action, "timeout_ms")
+        .and_then(|t| t.parse::<u64>().ok())
+        .unwrap_or(5000);
+
+    let output = std::process::Command::new("ping")
+        .args(["-c", "1", "-W", &format!("{}", timeout / 1000), &host])
+        .output()
+        .map_err(|e| EngineError::Execution(format!("Failed to ping '{}': {}", host, e)))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if output.status.success() {
+        Ok(stdout)
+    } else {
+        Ok(format!("Ping failed: {}", stderr))
+    }
+}
+
+fn builtin_git_status(action: &str, input: &str) -> EngineResult<String> {
+    let repo_path = extract_template_var(action, "repo_path")
+        .unwrap_or_else(|| input.to_string());
+
+    let output = std::process::Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| EngineError::Execution(format!("Failed to run git status: {}", e)))?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn builtin_git_diff(action: &str, _input: &str) -> EngineResult<String> {
+    let repo_path = extract_template_var(action, "repo_path")
+        .unwrap_or_else(|| ".".to_string());
+
+    let revision = extract_template_var(action, "revision")
+        .unwrap_or_else(|| "HEAD".to_string());
+
+    let output = std::process::Command::new("git")
+        .args(["diff", &revision])
+        .current_dir(&repo_path)
+        .output()
+        .map_err(|e| EngineError::Execution(format!("Failed to run git diff: {}", e)))?;
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn builtin_docker_ps() -> EngineResult<String> {
+    let output = std::process::Command::new("docker")
+        .args(["ps", "--format", "{{.ID}}\\t{{.Image}}\\t{{.Status}}\\t{{.Names}}"])
+        .output()
+        .map_err(|e| EngineError::Execution(format!("Failed to run docker ps: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(EngineError::Execution(format!("docker ps failed: {}", stderr)));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+fn builtin_env_get(action: &str, input: &str) -> EngineResult<String> {
+    let var_name = extract_template_var(action, "name")
+        .unwrap_or_else(|| input.to_string());
+
+    // SECURITY: Only allow reading from a safe allowlist
+    const SAFE_VARS: &[&str] = &[
+        "HOME", "USER", "SHELL", "LANG", "PATH", "TERM", "EDITOR",
+        "PWD", "OLDPWD", "HOSTNAME", "LOGNAME", "COLORTERM",
+    ];
+    if !SAFE_VARS.contains(&var_name.as_str()) {
+        return Err(EngineError::Execution(
+            format!("Reading environment variable '{}' is not permitted — only safe variables are allowed", var_name)
+        ));
+    }
+
+    match std::env::var(&var_name) {
+        Ok(value) => Ok(format!("{}={}", var_name, value)),
+        Err(_) => Ok(format!("Environment variable '{}' not set", var_name)),
+    }
+}
+
+/// Extract a template variable like {{path}} from an action string.
+///
+/// Parses `{{var_name}}` patterns from the action template and returns
+/// Some if the pattern exists, None if it doesn't. The actual value
+/// substitution is handled by the builtin functions using the input.
+fn extract_template_var(action: &str, var_name: &str) -> Option<String> {
+    let pattern = format!("{{{{{}}}}}", var_name); // e.g. "{{path}}"
+    if action.contains(&pattern) {
+        // The template var exists — return the pattern to signal it was found.
+        // The actual value comes from the input parameter in the caller.
+        Some(pattern)
+    } else {
+        None
+    }
+}

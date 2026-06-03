@@ -1,0 +1,50 @@
+[package]
+name = "pincher-core"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+onnx = ["dep:ort", "dep:ndarray"]
+landlock = ["dep:landlock"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+rusqlite = { version = "0.31", features = ["bundled", "load_extension"] }
+sha2 = "0.10"
+anyhow = "1"
+gethostname = "0.4"
+
+# UUID generation
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# System information
+sysinfo = "0.33"
+
+# Random number generation (for fallback embeddings)
+rand = "0.8"
+
+# BLAKE3 hashing
+blake3 = "1"
+
+# TOML configuration
+toml = "0.8"
+
+# Compression and archiving
+zstd = "0.13"
+tar = "0.4"
+
+# sqlite-vec extension
+sqlite-vec = "0.1"
+
+# ONNX Runtime (optional, for real embeddings)
+ort = { version = "2.0.0-rc.12", optional = true }
+ndarray = { version = "0.16", optional = true }
+
+# Landlock sandboxing (optional, Linux-only)
+landlock = { version = "0.4", optional = true }

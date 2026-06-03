@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pincher-infer"
+version = "0.1.0"
+description = "LLM sidecar for PincherOS — stateless inference bridge"
+requires-python = ">=3.10"
+dependencies = [
+    "jsonrpclib-pelix>=0.4",
+    "openai>=1.0",
+    "sentence-transformers>=2.2",
+    "numpy>=1.24",
+]
+
+[project.scripts]
+pincher-infer = "pincher_infer.server:main"

@@ -1,0 +1,39 @@
+# Default PincherOS Configuration
+
+[pincher]
+version = "0.1.0-alpha"
+
+[shell]
+# Leave empty — snap() auto-detects everything
+# device_type = "rpi4"    # Override auto-detection if needed
+
+[model]
+# default = "tinyllama-1.1b-q4_km"   # Auto-selected by snap()
+# upgrade = "phi-2-2.7b-q4_km"       # Available on GPU shells
+# gpu_layers = 0                      # Auto-calculated; 0=CPU, 16=Jetson, 32=Workstation
+
+[reflex]
+confidence_short_circuit = 0.90     # Skip LLM when confidence > this
+confidence_confirm = 0.70           # Use LLM confirmation when > this
+similarity_threshold = 0.50         # Minimum cosine similarity for a match
+# max_reflexes = 100000             # Compact when exceeded
+
+[sandbox]
+network = false                     # No internet by default
+# max_memory_mb = 512               # Per-action limit
+# max_cpu_seconds = 60              # Per-action limit
+
+[agent]
+# name = "default"                  # Your agent's name
+# unload_idle_seconds = 300         # Unload LLM after 5 min idle
+
+[logging]
+# level = "info"
+# file = "/opt/pincheros/run/pincher.log"
+
+[resource]
+# PID controller for RAM homeostasis
+kp = 2.0
+ki = 0.1
+kd = 0.5
+ram_target = 0.75                  # Target RAM utilisation ratio

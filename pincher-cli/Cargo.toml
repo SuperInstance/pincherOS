@@ -1,0 +1,18 @@
+[package]
+name = "pincher-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "pincher"
+path = "src/main.rs"
+
+[dependencies]
+pincher-core = { path = "../pincher-core" }
+clap = { version = "4", features = ["derive", "env"] }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+serde_json = { workspace = true }
+anyhow = "1"
+colored = "2"

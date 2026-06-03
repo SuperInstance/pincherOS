@@ -1,0 +1,34 @@
+# Build artifacts
+/target/
+**/target/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PincherOS data
+*.nail
+*.db
+reflexes.db
+
+# ONNX model cache
+models/

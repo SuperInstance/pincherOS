@@ -1,0 +1,116 @@
+# Code Review Capability Manifest
+# This file declares exactly what code review reflexes are allowed to do.
+# Apply when teaching: pincher teach --capabilities ./code-review-capabilities.toml
+#
+# KEY PRINCIPLE: Code review reflexes are READ-ONLY.
+# They can search and read code, but must NEVER modify it.
+
+[agent]
+name = "code-review-assistant"
+description = "Reflex-driven code review assistant for CI and local development"
+version = "0.1.0"
+
+# ── Filesystem Access ────────────────────────────────────────────────────
+# Read access to source and test directories.
+# ZERO write access — review reflexes must not modify code.
+
+[capabilities.filesystem]
+read_paths = [
+    "src/**",
+    "tests/**",
+    "lib/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "package.json",
+    "go.mod",
+    "go.sum",
+    "pyproject.toml",
+    "*.py",
+    "*.rs",
+    "*.go",
+    "*.js",
+    "*.ts",
+]
+write_paths = []  # ← READ-ONLY. No exceptions.
+
+# ── Network Access ───────────────────────────────────────────────────────
+# No network access needed for code review.
+# This prevents data exfiltration and unauthorized API calls.
+
+[capabilities.network]
+allowed = false
+
+# ── Subprocess Access ────────────────────────────────────────────────────
+# Review reflexes need to run search tools and build commands.
+# Only specific commands are allowed.
+
+[capabilities.subprocess]
+allowed = true
+allowed_commands = [
+    # Search tools
+    "rg",          # ripgrep
+    "grep",
+    "ag",          # silver searcher
+    # Build / test tools
+    "cargo",
+    "go",
+    "pytest",
+    "npm",
+    "yarn",
+    # Text processing
+    "wc",
+    "tail",
+    "head",
+    "sort",
+    "uniq",
+    "awk",
+    "sed",         # read-only usage only (sandbox enforces no writes)
+    # Custom scripts
+    "./check-naming.sh",
+    "./check-*.sh",
+]
+
+# ── Environment ──────────────────────────────────────────────────────────
+# Read a few safe environment variables. No write access.
+
+[capabilities.environment]
+allowed = true
+read_only = true
+allowed_vars = [
+    "HOME",
+    "PATH",
+    "CARGO_HOME",
+    "RUST_BACKTRACE",
+]
+
+# ── Resource Limits ──────────────────────────────────────────────────────
+# Review checks should be fast. Cap them to prevent runaway processes.
+
+[limits]
+max_cpu_time = "30s"
+max_memory = "256MB"
+max_open_files = 50
+max_output_size = "1MB"
+
+# ── Veto Rules ───────────────────────────────────────────────────────────
+# Additional hard blocks for code review safety.
+
+[veto.blocked_patterns]
+# Never allow writes of any kind
+commands = [
+    "rm .*",
+    "mv .*",
+    "cp .*",
+    "chmod .*",
+    "chown .*",
+    "git commit.*",
+    "git push.*",
+    "git reset.*",
+    "curl .*",
+    "wget .*",
+    "ssh .*",
+    "docker .*",
+    # Block any shell redirect that writes
+    ".*>.*",
+    ".*>>.*",
+]

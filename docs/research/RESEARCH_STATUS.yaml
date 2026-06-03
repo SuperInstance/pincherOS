@@ -1,0 +1,41 @@
+- file: rfc-jepa-integration.md
+  status: "exploratory"
+  owner: "research-team"
+  last_updated: 2026-06-03
+  mvp_blocker: false
+  next_review: 2026-09-01
+
+- file: rfc-penrose-memory.md
+  status: "exploratory"
+  owner: "research-team"
+  last_updated: 2026-06-03
+  mvp_blocker: false
+  next_review: 2026-09-01
+
+- file: rfc-command-dynamics-mlp.md
+  status: "deferred"
+  owner: "rigging-team"
+  last_updated: 2026-06-03
+  mvp_blocker: false
+  reason: "Deterministic veto sufficient for MVP. Train MLP after collecting 10K action logs."
+
+- file: rfc-no-std-core.md
+  status: "exploratory"
+  owner: "shell-team"
+  last_updated: 2026-06-03
+  mvp_blocker: false
+  next_review: 2026-12-01
+
+- file: rfc-constitutional-governance.md
+  status: "deferred"
+  owner: "research-team"
+  last_updated: 2026-06-03
+  mvp_blocker: false
+  reason: "Capability tokens are sufficient for MVP. Constitutional governance requires regulatory audit."
+
+- file: rfc-polyformal-synthesis.md
+  status: "abandoned"
+  owner: "research-team"
+  last_updated: 2026-06-03
+  mvp_blocker: false
+  reason: "Repurposed as threat-modeling framework, not architecture. See docs/threats.md."

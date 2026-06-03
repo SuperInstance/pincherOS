@@ -1,0 +1,73 @@
+# Smart Home Capability Manifest
+# This file declares exactly what the smart home reflexes are allowed to do.
+# Apply it when teaching reflexes: pincher teach --capabilities ./smart-home-capabilities.toml
+
+[agent]
+name = "smart-home-controller"
+description = "Reflex-driven smart home controller for Homebridge"
+version = "0.1.0"
+
+# ── Network Access ───────────────────────────────────────────────────────
+# Smart home reflexes need to call the Homebridge API.
+# Access is restricted to specific hosts only.
+
+[capabilities.network]
+allowed = true
+allowed_hosts = [
+    "homebridge.local:8581",
+    # Add more hubs as needed:
+    # "homeassistant.local:8123",
+    # "hassio.local:80",
+]
+allowed_protocols = ["http"]
+max_request_size = "1KB"
+max_response_size = "512KB"
+timeout = "5s"
+
+# ── Filesystem Access ────────────────────────────────────────────────────
+# Camera reflexes write snapshots to /tmp.
+# No other filesystem access is needed.
+
+[capabilities.filesystem]
+read_paths = []
+write_paths = [
+    "/tmp/camera-snapshot.jpg",
+    "/tmp/camera-back-snapshot.jpg",
+]
+max_file_size = "10MB"
+
+# ── Subprocess ───────────────────────────────────────────────────────────
+# Reflexes use curl for HTTP calls — no subprocess spawning needed.
+
+[capabilities.subprocess]
+allowed = false
+
+# ── Environment ──────────────────────────────────────────────────────────
+# No environment variable access needed.
+
+[capabilities.environment]
+allowed = false
+
+# ── Resource Limits ──────────────────────────────────────────────────────
+# These are per-reflex limits enforced by the sandbox.
+
+[limits]
+max_cpu_time = "10s"
+max_memory = "64MB"
+max_open_files = 10
+
+# ── Veto Rules ───────────────────────────────────────────────────────────
+# These are hard blocks that the veto engine enforces before any execution.
+# The default veto rules already block dangerous patterns (rm -rf /, /etc writes).
+# Add any smart-home-specific rules here.
+
+[veto.blocked_patterns]
+# Never allow calls to external services (outside the LAN)
+commands = [
+    "curl.*google\\.com",
+    "curl.*amazon\\.com",
+    "curl.*cloudflare\\.com",
+    "wget.*",
+    "ssh.*",
+    "scp.*",
+]
