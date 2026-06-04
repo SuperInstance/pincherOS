@@ -1,0 +1,12 @@
+{
+  "title": "THE-WHEEL-HAS-MANY-SPOKES",
+  "insight": "The cloud sends chords, not notes. Each shell decompresses to its capacity: Jetson gets shapes and inversions, Pi gets chord names, ESP32 gets raw notes, Arduino gets binary writes. The compression ratio is the intelligence gap, and it emerges from hardware fingerprint + confidence history + latency budget.",
+  "anchors": [
+    "baton-system/research/multi-shell-cognition.md",
+    "forgemaster-archive/fleet/for-fleet/2026-05-12-convergence-with-oracle1.i2i",
+    "/tmp/pincher/pincher-core/src/reflex/engine.rs"
+  ],
+  "resonates_with": ["THE-BATON-SPLINE", "THE-CRAB-INHERITS-THE-SHELL", "THE-DRIFT-IS-THE-PROOF"],
+  "origin": "oracle2 during 2026-06-04 multi-shell cognition discussion with Casey",
+  "negative_space": "This is NOT about cloud-tyranny. The A/B loop flows both ways — edge feeds novel reflexes up to cloud. The teacher learns from the student."
+}
