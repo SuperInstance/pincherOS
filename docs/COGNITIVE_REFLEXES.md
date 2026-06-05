@@ -139,3 +139,95 @@ The abstraction reduces modeling overhead because:
 - The persist layer is decentralized (GitHub + disk + baton vessel)
 
 === Reflexes induced from self-simulation — June 5, 2026 ===
+
+---
+
+## Reflex ε — The Promotion Reflex
+
+**Trigger:** Novel problem solved successfully. The initial reflex scan
+returned no match, and the solution required >1 inference cycle.
+
+**Reflex:**
+```
+1. DETECT NOVELTY:    Was this solved by an existing reflex?
+2. EVALUATE:           Is this pattern generalizable?
+   ├─ Unique one-off       → skip (not reusable)
+   ├─ Repeatable in session → note in CONTEXT.md
+   └─ Repeatable across sessions → promote to COGNITIVE_REFLEXES.md
+3. EXTRACT:             Stimulus pattern → taxonomy → action sequence
+4. PROMOTE:             Write as new reflex via promote-reflex.sh
+5. PERSIST:             Update SESSION-STATE.md + CONTEXT.md
+```
+
+**Why it works:** Without promotion, every novel problem is solved from
+scratch forever. The system shows no learning across sessions. Reflex ε
+closes the learning loop by turning novel solutions into permanent skills.
+Token savings compound: each promotion pays off every subsequent time
+the pattern reappears.
+
+**Object permanence:** Encoded in COGNITIVE_REFLEXES.md (durable).
+Promotion metadata in SESSION-STATE.md (checkpoint).
+
+**Anti-fragile property:** Reflex ε is a meta-reflex — a reflex about
+generating reflexes. This is the system learning *how to learn*.
+The more novel problems the system solves, the more reflexes it accumulates.
+Over time, fewer problems are "novel" and more are handled in O(1).
+
+### Promotion Heuristics
+
+A solution is "promotable" when:
+1. Same pattern encountered >1 time across sessions
+2. Solution required >1 inference cycle (non-trivial)
+3. Agent self-attests: "This pattern is reusable"
+
+### Usage
+
+```bash
+scripts/promote-reflex.sh "My New Reflex" \
+  "Stimulus description" \
+  "Taxonomy classification" \
+  "Action steps" \
+  "Why this pattern matters"
+```
+
+=== Reflex ε promoted via Reflex ε — 2026-06-05 01:17 UTC ===
+
+
+---
+
+## Reflex ζ — The Dedup Reflex
+
+**Trigger:** Two or more reflexes share overlapping trigger patterns or action chains. Reflex scan takes longer than expected due to near-identical matches.
+
+**Reflex:**
+1. SCAN:  Parse all reflexes from COGNITIVE_REFLEXES.md 2. TOKENIZE: Key words from each reflex's trigger + action into sorted unique token sets 3. COMPARE: Jaccard similarity for trigger keywords, action keywords, combined (60/40 weight) 4. FLAG:  Overlap ≥60% → merge candidate. Report to SESSION-STATE.md 5. MERGE: With --merge flag, auto-merge overlapping trigger patterns into combined reflex 6. PERSIST: Update COGNITIVE_REFLEXES.md, SESSION-STATE.md, CONTEXT.md
+
+**Taxonomy:**
+Jaccard similarity on keyword tokens (trigger 60% + action 40% weighted). Pairwise comparison of all  reflexes = O(^2). Merge candidates flagged at ≥60% combined overlap.
+
+**Why it works:** Without dedup, overlapping reflexes waste match time. With 5 reflexes the cost is negligible; with 50+ it becomes a real bottleneck. Dedup ensures the reflex library stays sparse and efficient as it grows.
+
+**Object permanence:** Encoded in COGNITIVE_REFLEXES.md (durable).
+Promotion metadata in SESSION-STATE.md (checkpoint).
+
+=== Promoted via Reflex ε — 2026-06-05 01:49 UTC ===
+
+
+---
+
+## Reflex η — The Archive GC Reflex
+
+**Trigger:** memory/archive/ or CONTEXT.md archive has files older than retention policy. Disk space running low.
+
+**Reflex:**
+1. SCAN: Find all .md files in memory/archive/ 2. CHECK: For each file, compute age from mtime 3. DECIDE: age < KEEP_DAYS → keep. filename matches YYYY-MM-01 or CONTEXT-YYYY-MM-01 → keep (monthly). otherwise → prune 4. PRUNE: Delete pruned files. Report count and bytes freed. 5. PERSIST: Log GC results to archive-gc-log.md
+
+**Taxonomy:**
+Three-tier retention: keep last 30 days (hot), keep first-of-month files (warm, monthly snapshots), prune everything else (cold).
+
+**Why it works:** Without archive GC, memory/archive/ grows unbounded. Each session creates a new CONTEXT.md archive. After 365 days, both the directory scan and token budget suffer.
+
+**Object permanence:** Encoded in COGNITIVE_REFLEXES.md (durable).
+Promotion metadata in SESSION-STATE.md (checkpoint).
+
+=== Promoted via Reflex ε — 2026-06-05 01:51 UTC ===
