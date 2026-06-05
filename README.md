@@ -344,7 +344,7 @@ The project does **not** deploy in "5 modes." It deploys in exactly one mode: **
 
 ## Roadmap (Near-Term)
 
-These are the real priorities as documented in `docs/ROADWAY.md` and `docs/MVP_CHECKLIST.md`:
+These are the real priorities as documented in `docs/ROADMAP.md` and `docs/MVP_CHECKLIST.md`:
 
 1. **WASM guest execution** — the `wasmtime` feature is wired, guest protocol is defined
 2. **Landlock sandboxing** — the `landlock` feature is wired, needs production testing
