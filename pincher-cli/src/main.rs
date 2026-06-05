@@ -664,8 +664,7 @@ fn get_disk_space(path: &Path) -> Result<(f64, f64), std::io::Error> {
         .output()?;
 
     if !output.status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        return Err(std::io::Error::other(
             format!("df exited with status: {:?}", output.status.code()),
         ));
     }
@@ -679,8 +678,7 @@ fn get_disk_space(path: &Path) -> Result<(f64, f64), std::io::Error> {
         let free = parts[3].parse::<f64>().unwrap_or(0.0);
         Ok((free / 1e9, total / 1e9))
     } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
+        Err(std::io::Error::other(
             "Unexpected df output format",
         ))
     }
