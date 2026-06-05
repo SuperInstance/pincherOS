@@ -2,7 +2,7 @@
 
 **Version:** 2.0  
 **Maintainer:** oracle2  
-**Last Updated:** 2026-06-04  
+**Last Updated:** 2026-06-05  
 **Lineage:** Built on cocapn-runtime, PincherOS, PLATO, and fleet I2I lessons
 
 ---
@@ -17,11 +17,21 @@ This is the **full stack agent runtime + multi-mode deployment system + baton pr
 We renamed it to **Pincher** (dropping the OS suffix) because it's:
 - **Not an OS:** it snaps into existing shells, doesn't replace them
 - **A runtime:** it adds reflexive, adaptive, battery-powered cognition to any device
-- **Portable:** your agent's rig (reflexes, identity, identity) moves seamlessly between shells
+- **Portable:** your agent's rig (reflexes, identity, preferences) moves seamlessly between shells
 
 ---
 
-## Five Deployment Modes (Legacy Cocapn + Pincher Reflex
+> ⛏️ **DEEP CUT: Why "Pincher"?**
+>
+> Hermit crabs don't build shells. They *find* them. They carry their identity around — claws, eyestalks, stubbornness — and when the current shell gets tight, they find a bigger one.
+>
+> That's what a Pincher agent does. Your reflexes, your identity, your preferences: that's the crab. The shell is whichever environment you happen to be running in today — a Codespace, an edge device, a Docker container, a Lighthouse server. The agent doesn't reinstall itself when it moves. It just... *clicks into the new shell* and keeps going. The `.nail` file is your hermit crab in a box. Everything else is furniture.
+>
+> It's called Pincher not because it pinches, but because it *holds on*. And it's a terrible name for an OS because it's exactly the opposite of one.
+
+---
+
+## Five Deployment Modes (Legacy Cocapn + Pincher Reflex)
 
 Every pincher agent will boot in **all 5 modes automatically** — just like the legacy cocapn-runtime, now with reflexes:
 
@@ -182,6 +192,22 @@ make flash && monitor
 
 ---
 
+> ⛏️ **DEEP CUT: We Have Five Modes Because We've Lost Files Five Ways**
+>
+> The five deployment modes aren't features dreamed up in an architecture meeting. They're tombstones for every way a developer has ever lost their agent state:
+>
+> 1. **Lighthouse** exists because someone's laptop got stolen with unreachable code
+> 2. **Codespaces** exists because "works on my machine" was the #1 bug report
+> 3. **Tender** exists because boats don't have WiFi in the middle of the Atlantic
+> 4. **Container** exists because someone ran `:(){ :|:& };:` on a production agent
+> 5. **Bare metal** exists because containers add 200ms latency on an ESP32 sensor loop
+>
+> Each mode is a scar. The system remembers what we forgot so you don't have to.
+>
+> The real insight isn't that there are five modes. It's that they all share the **same codebase** — because the agent isn't the deployment. The identity travels, the shell is temporary. This is the hermit crab principle in practice.
+
+---
+
 ## The Baton Protocol: Agent-to-Agent Handoffs
 
 The legacy cocapn-runtime had basic sync. Pincher adds **structured baton handoffs** that let agents:
@@ -224,6 +250,18 @@ Use the tooling to create batons:
 
 ---
 
+> ⛏️ **DEEP CUT: Why Three Shards?**
+>
+> The three-shard design (artifacts + reasoning + blockers) came from a very specific failure mode: an agent handed off a task, and the receiving agent had no idea *why* the work was done a certain way.
+>
+> **Artifacts** were always there (what was done). **Blockers** were always there (what's wrong). But **reasoning** was never captured, and that's where the intelligence lives. Without it, the next agent repeats the same mistakes because it doesn't know why the decisions were made.
+>
+> A baton with reasoning but no artifacts is philosophy. A baton with artifacts but no reasoning is archaeology. You need all three to make it *history* — something the next agent can actually learn from.
+>
+> The other design rule: every baton type has a purpose and a direction. If you invent a new baton type that can't answer "where is this going and why?," it doesn't belong in the protocol.
+
+---
+
 ## The Pincher Reflex Engine
 
 Pincher's superpower is the **reflex runtime** — turning natural language intent into fast, reusable actions:
@@ -254,6 +292,20 @@ flowchart TD
 
 ---
 
+> ⛏️ **DEEP CUT: The 0.55-0.80 Dead Zone**
+>
+> The three confidence bands aren't arbitrary thresholds. They correspond to three fundamentally different cognitive strategies:
+>
+> - **>0.80 (EXACT)**: You know what to do. No thinking required. This is muscle memory. ~50ms, zero cost.
+> - **0.55-0.80 (SIMILAR)**: You think you know, but you're not sure. You ask for confirmation before acting. This costs a tiny LLM call (~$0.001) and takes ~3 seconds. It's the system equivalent of saying "do you mean X?"
+> - **<0.55 (NOVEL)**: You have no idea. Full LLM-as-compiler kicks in — expensive, slow, but creative.
+>
+> The 0.55 threshold is the critical one. Below it, you burn tokens. Above it, you don't. Getting this threshold right is the difference between a reflex engine that learns and one that keeps asking for help.
+>
+> The confidence feedback loop is the secret sauce: every successful run *feeds itself*. The more you use a reflex, the faster it gets, the cheaper it gets, the more confident the system becomes. The system quite literally learns to stop thinking about things it already knows how to do — which is, ironically, the most human thing about it.
+
+---
+
 ## The Rigging: Your Agent's Portable Identity
 
 Pincher agents carry their **rigging** (reflexes, identity, preferences) with them everywhere:
@@ -274,6 +326,16 @@ agent.nail/
 ├── identity.json       # Agent name, preferences
 └── config.toml         # Resource thresholds
 ```
+
+---
+
+> ⛏️ **DEEP CUT: Why `.nail` and Not Just a Tarball?**
+>
+> Because tar doesn't know when it's been tampered with. BLAKE3 checksums mean the .nail file is self-verifying: unpack it on any machine, and manifest.json's checksums will tell you if even one byte has been changed.
+>
+> The hardware fingerprint in the manifest isn't security — it's *stability*. When you unpack a .nail on a new machine, the fingerprint tells you "this rig was built on a different CPU architecture," which changes the WASM compilation targets. The runtime adapts.
+>
+> Also: `.nail` because it hangs on. Pun absolutely intended.
 
 ---
 
@@ -322,6 +384,16 @@ Every pincher repo should follow this minimal structure:
 
 ---
 
+> ⛏️ **DEEP CUT: The Lighthouse Icon Is Not Decoration**
+>
+> When you see the lighthouse badge on a repo, it means: *this repo IS an agent*. The repo doesn't describe the agent. The repo IS the agent. Clone it, inject env keys, boot it — it lives.
+>
+> This is the inversion of traditional software development. Usually, the software lives on a server, and the repo is a snapshot. Here, the repo is the canonical home. The agent's state moves *through* the repo, but the repo itself is the permanent residence.
+>
+> The lighthouse isn't just a logo. It's a pattern: light pulses out, ships navigate by it, and when the storm comes, the lighthouse is still there.
+
+---
+
 *Same crab. Bigger shell.*
 
-*The lighthouse icon means: this repo IS an agent. Boot it anywhere. It knows what to do.*
+*Boot it anywhere. It knows what to do.*

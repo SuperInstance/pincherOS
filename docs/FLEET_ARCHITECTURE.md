@@ -153,3 +153,21 @@ The baton protocol already works across:
 3. ⬜ **Write the .env contract** for each L2-ready agent repo
 4. ⬜ **Extend pincher CI/CD** to support L3 agent activation via workflow_dispatch
 5. ⬜ **Build the fleet-level orchestrator** that selects L1/L2/L3/L4 per task
+
+---
+
+## 🎬 The Real Story: The Four Levels Are a Confession
+
+The four-level system (L1-L4) sounds like elegant architecture. It's not. It's a confession that we couldn't fit everything on one machine.
+
+**L1 (Knowledge Base)** exists because everyone discovered they couldn't keep all 598 SuperInstance repos cloned locally. 598 repos at 200MB each is 120GB. Nobody has that on their laptop. So L1 is the polite way of saying "host it on GitHub and read it when you need it."
+
+**L2 (Cloned Agent)** exists because some repos need to run. If you can't clone it and boot it, it's not really an agent — it's a spec. But cloning everything eats disk, and disk is the one resource you can't cloud-scale your way out of when you're on a 45GB ARM64 VM.
+
+**L3 (Remote Agent)** exists because the ARM64 VM was at 90% disk and something had to give. CI/CD and Codespaces are the off-ramp: let GitHub do the heavy compilation while the orchestrator just fires triggers.
+
+**L4 (Distilled Agent)** exists because the LLM bill was getting painful. Every inference call costs money. If you can capture the *output pattern* as a vector DB lookup, you skip the inference entirely. L4 is the "we've seen this before" optimization.
+
+The real genius isn't the levels themselves — it's that **each level is a fallback for the one below it**. L1 is always available. L2 is faster but costs disk. L3 is zero-local but costs CI minutes. L4 is cheapest but only works for known patterns. The orchestrator should pick the cheapest level that works for the task, and fall up the stack when it can't.
+
+This isn't architecture. It's triage dressed up as architecture.

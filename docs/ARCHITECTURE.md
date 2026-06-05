@@ -105,3 +105,24 @@ Developer Push → GitHub Actions CI/CD
 3. **Regex beats LLM** — pre-compiled extraction at <1ms beats API call at >500ms
 4. **Cloud heals** — broken code goes UP to compiler, fixed code comes DOWN to edge
 5. **Zero-temperature healing** — creativity causes regressions; deterministic fixes only
+
+---
+
+## 🎬 The Real Story: Why the Edge Must Stay Sterile
+
+Every architecture document says "the edge should be sterile" like it's a universal truth. It's not. It's a scar from a specific battle.
+
+We learned this the hard way during the **PLATO days**: agents that could self-modify were fine — until they weren't. The edge device would compile a reflex, run it successfully 47 times, then on the 48th time the WASM sandbox would catch an infinite loop, and by then the device was at 98% CPU with a bricked agent. The agent had mutated itself into a corner it couldn't escape.
+
+**The rule is simple:** an edge device should never trust its own creativity. The edge is for *execution*. The cloud is for *generation*. If the edge needs new code, it sends a telemetry packet UP. The cloud compiles, signs, and sends it DOWN. The edge never generates. It only receives, verifies, and runs.
+
+This asymmetry is deliberate. It means:
+- The edge can be fully offline and still run (it just can't *learn* new reflexes)
+- The registry is a single source of truth — no two devices can diverge
+- A compromised edge device can't spread mutated code because it can't sign bundles
+
+The sterility cost is real: an offline edge device can't learn. But the cost of a bricked device that can't even *reboot into a safe state* is higher. The tradeoff is worth it until someone builds a verifiably safe self-modification sandbox.
+
+**The deeper insight:** this architecture inverts the standard AI pattern. Normal AI runs inference on the cloud and sends results to the edge. Pincher runs inference on the edge and sends *failure telemetry* to the cloud. The cloud only acts when something breaks. The edge is the primary runtime. The cloud is the safety net.
+
+This is backwards from ChatGPT, and that's the point. Pincher is not a chatbot. It's a runtime that happens to use an LLM as a compiler.
