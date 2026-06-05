@@ -18,6 +18,7 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 rusqlite = { version = "0.31", features = ["bundled", "load_extension"] }
 sha2 = "0.10"
+ternary-types = { git = "https://github.com/SuperInstance/ternary-types", features = ["serde"] }
 anyhow = "1"
 gethostname = "0.4"
 

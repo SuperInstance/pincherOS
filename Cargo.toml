@@ -19,3 +19,4 @@ tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 thiserror = "1"
 chrono = { version = "0.4", features = ["serde"] }
+ternary-types = { git = "https://github.com/SuperInstance/ternary-types", features = ["serde"] }
