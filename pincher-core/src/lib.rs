@@ -13,6 +13,7 @@ pub mod intent;
 pub mod migration;
 pub mod reflex;
 pub mod resource;
+pub mod route;
 pub mod rpc;
 pub mod sandbox;
 pub mod security;
@@ -21,6 +22,11 @@ pub mod shell;
 // ── Crate-level re-exports ──────────────────────────────────────────
 
 pub use embed::{cosine_similarity, download_model, EmbedError, EmbedResult, EMBEDDING_DIM};
+pub use route::{
+    all_pairs_shortest_paths, build_routing_graph, connected_components, label_propagation,
+    laplacian, modularity, normalized_laplacian, shortest_paths, spectral_clustering, Room,
+    RoomGraph, TernaryGraph,
+};
 
 pub use reflex::{
     EngineError, EngineResult, EngineStatus, Execution, MatchError, MatchThresholds, MatchType,
