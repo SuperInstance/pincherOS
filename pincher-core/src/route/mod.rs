@@ -142,9 +142,7 @@ pub fn shortest_paths(g: &TernaryGraph, source: usize) -> Vec<Option<f64>> {
 
     (0..n)
         .map(|i| {
-            if in_neg_cycle[i] {
-                None
-            } else if dist[i] == f64::INFINITY {
+            if in_neg_cycle[i] || dist[i] == f64::INFINITY {
                 None
             } else {
                 Some(dist[i])
@@ -158,6 +156,7 @@ pub fn all_pairs_shortest_paths(g: &TernaryGraph) -> Vec<Vec<Option<f64>>> {
     let n = g.node_count();
     // Adjacency matrix initialised to INF
     let mut dist = vec![vec![f64::INFINITY; n]; n];
+    #[allow(clippy::needless_range_loop)]
     for i in 0..n {
         dist[i][i] = 0.0;
         for &(j, w) in &g.adj[i] {
@@ -482,11 +481,11 @@ pub fn laplacian(g: &TernaryGraph) -> Vec<Vec<f64>> {
     let n = g.node_count();
     let mut lap = vec![vec![0.0; n]; n];
 
-    for u in 0..n {
+    for (u, row) in lap.iter_mut().enumerate() {
         for &(v, w) in &g.adj[u] {
             let weight = i8::from(w) as f64;
-            lap[u][u] += weight.abs(); // degree = sum of |weight|
-            lap[u][v] -= weight; // −A_uv
+            row[u] += weight.abs(); // degree = sum of |weight|
+            row[v] -= weight; // −A_uv
         }
     }
 
@@ -529,13 +528,9 @@ pub fn normalized_laplacian(g: &TernaryGraph) -> Vec<Vec<f64>> {
 pub fn adjacency_f64(g: &TernaryGraph) -> Vec<Vec<f64>> {
     let n = g.node_count();
     let mut adj = vec![vec![0.0; n]; n];
-    for u in 0..n {
+    for (u, row) in adj.iter_mut().enumerate() {
         for &(v, w) in &g.adj[u] {
-            if !g.directed {
-                adj[u][v] = i8::from(w) as f64;
-            } else {
-                adj[u][v] = i8::from(w) as f64;
-            }
+            row[v] = i8::from(w) as f64;
         }
     }
     adj
@@ -545,12 +540,12 @@ pub fn adjacency_f64(g: &TernaryGraph) -> Vec<Vec<f64>> {
 pub fn degree_matrix(g: &TernaryGraph) -> Vec<Vec<f64>> {
     let n = g.node_count();
     let mut d = vec![vec![0.0; n]; n];
-    for u in 0..n {
+    for (u, row) in d.iter_mut().enumerate() {
         let sum_abs: f64 = g.adj[u]
             .iter()
             .map(|&(_, w)| i8::from(w).abs() as f64)
             .sum();
-        d[u][u] = sum_abs;
+        row[u] = sum_abs;
     }
     d
 }
