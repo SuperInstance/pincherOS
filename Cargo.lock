@@ -1374,6 +1374,7 @@ dependencies = [
  "sqlite-vec",
  "sysinfo",
  "tar",
+ "ternary-graph",
  "thiserror 1.0.69",
  "tokio",
  "toml",
@@ -1900,6 +1901,11 @@ checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "ternary-graph"
+version = "0.1.0"
+source = "git+https://github.com/SuperInstance/ternary-graph#fdf1355e56a40f778e876a2baee4a16769f1258f"
 
 [[package]]
 name = "thiserror"

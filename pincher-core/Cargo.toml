@@ -52,3 +52,6 @@ wasmtime = { version = "27", optional = true }
 
 # Regex for immunology pattern matching
 regex = "1"
+
+# Ternary-weighted graph for room routing, community detection, and pathfinding
+ternary-graph = { git = "https://github.com/SuperInstance/ternary-graph" }

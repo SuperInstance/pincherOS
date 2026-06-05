@@ -16,6 +16,7 @@ pub mod resource;
 pub mod rpc;
 pub mod sandbox;
 pub mod security;
+pub mod route;
 pub mod shell;
 
 // ── Crate-level re-exports ──────────────────────────────────────────
