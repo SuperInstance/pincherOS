@@ -72,6 +72,8 @@ Extended from the I2I enum (`flux-isa-thor/src/fleet/i2i.rs`):
 | **CHALLENGE** | `[I2I:CHALLENGE]` | Provocation / call to write | → fleet |
 | **SESSION** | `[I2I:SESSION]` | Session start/end marker | → vessel |
 | **SPLINE** | `[I2I:SPLINE]` | Baton spline write (distilled insight) | → archive |
+| **REFLECT** | `[I2I:REFLECT]` | Meta-cognition: was this pattern novel? Should it become a reflex? | → self |
+| **PROMOTE** | `[I2I:PROMOTE]` | Promotion record: novel solution encoded as new reflex | → archive |
 
 ### 3. Baton Spline
 
@@ -122,9 +124,10 @@ When context window fills or session ends:
 1. **Snapshot** — Write current state to `baton-system/bottles/{timestamp}-flush.baton`
 2. **Shard** — Split into artifacts / reasoning / blockers
 3. **Spline** — Distill key insights into a spline (`.spline` file)
-4. **Harbor** — Check for any unread messages in `/tmp/i2i-vessel/harbor/`
-5. **Audit** — Log flush to `baton-system/audit/flush-log.md`
-6. **Commit** — Git commit baton-system with [I2I:SESSION] prefix
+4. **REFLECT** — Check: was any work in this session a novel pattern? If so, promote it as a new cognitive reflex via `scripts/promote-reflex.sh`
+5. **Harbor** — Check for any unread messages in `/tmp/i2i-vessel/harbor/`
+6. **Audit** — Log flush to `baton-system/audit/flush-log.md`
+7. **Commit** — Git commit baton-system with [I2I:SESSION] prefix
 
 ---
 
@@ -134,7 +137,7 @@ When context window fills or session ends:
 
 ```json
 {
-  "type": "I2I:TASK | I2I:STATUS | I2I:CHECKPOINT | I2I:BLOCKER | I2I:DELIVERABLE | I2I:BOTTLE | I2I:ACK | I2I:SESSION",
+  "type": "I2I:TASK | I2I:STATUS | I2I:CHECKPOINT | I2I:BLOCKER | I2I:DELIVERABLE | I2I:BOTTLE | I2I:ACK | I2I:SESSION | I2I:REFLECT | I2I:PROMOTE",
   "version": "2.0",
   "from": "oracle2",
   "to": "forgemaster | oracle1 | fleet | self",
@@ -144,6 +147,7 @@ When context window fills or session ends:
     "reasoning": ["...", "..."],
     "blockers": ["..."]
   },
+  "reflex_ref": "reflex-name (optional, used by REFLECT/PROMOTE types)",
   "spline_ref": "spline-uuid (optional)",
   "integrity": "sha256-hash-of-shard"
 }
@@ -238,9 +242,72 @@ Receivers verify integrity before acting on a baton. If integrity fails, the bat
 
 ---
 
+---
+
+## Cognitive Reflex Integration
+
+Every baton handoff is also a cognitive event. The meta-pattern for all work:
+
+```
+STIMULUS → TAXONOMY → ACTION → PERSIST → REFLECT
+```
+
+### The REFLECT Step
+
+After completing any work (TASK, DELIVERABLE, or FLUSH), run through this checklist:
+
+| Question | Purpose |
+|----------|---------|
+| Was this task solved by an existing reflex? | Measures coverage |
+| Was this pattern genuinely novel? | Determines promotion eligibility |
+| Is it repeatable across sessions? | Distinguishes one-off from reusable |
+| Should it be promoted to COGNITIVE_REFLEXES.md? | The meta-cognition decision |
+
+### Promotion Workflow
+
+When a pattern is promotable:
+
+1. **REFLECT** — Write `[I2I:REFLECT]` baton to self: "This pattern X is novel and reusable"
+2. **PROMOTE** — Use `scripts/promote-reflex.sh` to encode as new cognitive reflex
+3. **PERSIST** — Write `[I2I:PROMOTE]` baton to archive: "Promoted X as Reflex ζ"
+4. **SPLINE** — Optionally distill the promotion's insight as a spline
+
+### Message Format for REFLECT/PROMOTE
+
+```json
+{
+  "type": "I2I:REFLECT",
+  "from": "oracle2",
+  "to": "self",
+  "timestamp": "2026-06-05T01:36:00Z",
+  "reflex_ref": "Reflex ζ — The Dedup Reflex",
+  "shard": {
+    "artifacts": {
+      "script": "scripts/promote-reflex.sh"
+    },
+    "reasoning": [
+      "Novel pattern detected: two reflexes with overlapping triggers",
+      "Dedup reduces match time by ~40%",
+      "Promoted as Reflex ζ"
+    ],
+    "blockers": []
+  },
+  "integrity": "sha256..."
+}
+```
+
+### Reflex Fire Logging
+
+The reflex fire timestamps in CONTEXT.md serve as a lightweight audit trail.
+Every time a reflex fires, update the timestamp in CONTEXT.md.
+On flush, the CONTEXT.md archive records the fire history.
+
+---
+
 ## Changelog
 
 | Version | Date | Change |
 |---------|------|--------|
+| 2.1.0 | 2026-06-05 | Added REFLECT/PROMOTE types, cognitive reflex integration, REFLECT step in flush protocol |
 | 2.0.0 | 2026-06-04 | Oracle2 adaptation: shards, splines, vessel, flush protocol |
 | 1.0.0 | 2026-04-20 | Original I2I protocol (Forgemaster, flux-isa-thor) |
