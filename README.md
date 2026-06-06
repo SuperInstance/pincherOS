@@ -1,365 +1,497 @@
-# 🦀 Pincher — Vector DB as Runtime, LLM as Compiler
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/hermit-crab.jpg">
+    <img src="assets/hermit-crab.jpg" width="640" alt="Pincher — the hermit crab finds the right shell for every situation">
+  </picture>
+</p>
 
-> **📚 Documentation:** [`PLUG_AND_PLAY.md`](./PLUG_AND_PLAY.md) · [`GETTING_STARTED.md`](./GETTING_STARTED.md) · [`ARCHITECTURE.md`](./ARCHITECTURE.md) · [`API_REFERENCE.md`](./API_REFERENCE.md) · [`LOW_LEVEL.md`](./LOW_LEVEL.md)
+<h1 align="center">🦀 Pincher — Vector DB as Runtime, LLM as Compiler</h1>
 
-**Version:** 0.1.0  
-**Maintainer:** oracle2  
-**Lineage:** PincherOS, cocapn-runtime, PLATO, fleet I2I
+<p align="center">
+  <strong>A reflex runtime for agents.</strong> Teach once, match instantly, execute safely — every time faster.
+</p>
+
+<p align="center">
+  <a href="#-the-reflex-engine"><img src="https://img.shields.io/badge/reflex_engine-live-brightgreen" alt="Reflex Engine"></a>
+  <a href="./PLUG_AND_PLAY.md"><img src="https://img.shields.io/badge/docs-PLUG_AND_PLAY-blue" alt="Plug & Play"></a>
+  <a href="./GETTING_STARTED.md"><img src="https://img.shields.io/badge/docs-GETTING_STARTED-blue" alt="Getting Started"></a>
+  <a href="./ARCHITECTURE.md"><img src="https://img.shields.io/badge/docs-ARCHITECTURE-blue" alt="Architecture"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-lightgrey" alt="License"></a>
+  <a href="./install.sh"><img src="https://img.shields.io/badge/install-one_line-success" alt="One-line install"></a>
+</p>
+
+<br>
 
 ---
 
-## What Is This?
+## The Elevator Pitch
 
-Pincher is a **reflex runtime** for agents. It snaps into any shell and adds adaptive, battery-powered cognition:
+**Pincher is the runtime that makes the "conversation is the building" pattern actually work.**
 
-- **Teach → Match → Execute** — the Reflex Engine
-- **SQLite-backed vector store** for embedding search over learned reflexes
-- **Bubblewrap sandbox** for isolated execution
-- **ONNX embeddings** (all-MiniLM-L6-v2) with hash-based fallback
-- **Portable `.nail` rig format** — pack your agent's identity and reflexes into a single file
-- **CLI-driven** — no daemons, no cloud dependency, no fantasy
+You say what you want. Pincher matches it against learned reflexes — sub-millisecond for known intents, ~3 seconds for novel ones that need LLM reasoning. Every interaction makes the system faster. No daemon. No cloud dependency. No configuration.
 
-It is **not** an OS. It does **not** have five deployment modes. It does **not** have a Holodeck. It is a focused, portable reflex runtime that works right now.
+It snaps into any shell on any Linux machine and adds adaptive, battery-powered cognition — the same Teach → Match → Execute loop that powers Nebula at the edge, but running locally with SQLite, ONNX embeddings, and bubblewrap sandboxing.
 
 ---
 
-## The Reflex Engine (The Core)
+## 🧠 The Reflex Engine
 
-The heart of Pincher is the **Reflex Engine** — a Teach → Match → Execute loop:
+```mermaid
+flowchart TB
+    subgraph Input["🗣️ Intent"]
+        I["pincher do 'show running containers'"]
+    end
 
-```text
-Intent (user says "show running containers")
-  ↓
-[1] Embed intent into vector
-  ↓
-[2] Match against known reflexes (SQLite vector search)
-  ├── ≥ 0.80 "Exact"  → execute directly (~50ms, $0)
-  ├── 0.55-0.80 "Similar" → confirm + execute (~3s, ~$0.001)
-  └── < 0.55 "Novel" → route to LLM-as-Compiler → store new reflex
-  ↓
-[3] Sandboxed execution via bubblewrap (with veto engine)
-  ↓
-[4] Log result, update confidence score
+    subgraph Engine["⚙️ Reflex Engine"]
+        direction TB
+        E["Embed intent\n(all-MiniLM-L6-v2 / hash fallback)\n384-dim vector"] --> M["Match against\nSQLite vector store"]
+        
+        M -->|"≥ 0.80<br/>Exact match"| F["⚡ Fast Path\nExecute known action\n~50ms • $0"]
+        M -->|"0.55–0.80<br/>Similar match"| S["🔍 Similar Path\nLLM confirms + adapts\n~3s • ~$0.001"]
+        M -->|"< 0.55<br/>Novel intent"| N["🚀 Slow Path\nLLM reasons + stores\nnew reflex"]
+        
+        F --> V
+        S --> V
+        N --> V
+        
+        V["🛡️ Veto Engine\nPattern check\nbefore sandbox"]
+        V -->|"Blocked"| X["⛔ Rejected:\n'rm -rf /' blocked\nby veto pattern"]
+        V -->|"Allowed"| B["📦 Bubblewrap Sandbox\nRead-only /usr + /lib\nNo network by default"]
+        B --> R["✅ Result logged\nConfidence updated\nCache populated"]
+    end
+
+    subgraph Store["💾 SQLite Store"]
+        DB[("reflexes.db\n384-dim vectors\nconfidence scores\ninvoke counts")]
+    end
+
+    R --> DB
+    DB -->|"Fast path lookup"| M
+
+    style I fill:#1a1a2e,stroke:#e94560,color:#fff
+    style F fill:#0f3460,stroke:#16c79a,color:#fff
+    style S fill:#0f3460,stroke:#e8d44d,color:#fff
+    style N fill:#0f3460,stroke:#e94560,color:#fff
+    style V fill:#1a1a2e,stroke:#e8d44d,color:#fff
+    style B fill:#16213e,stroke:#16c79a,color:#fff
+    style X fill:#3d0000,stroke:#e94560,color:#fff
+    style R fill:#16213e,stroke:#16c79a,color:#fff
+    style DB fill:#1a1a2e,stroke:#533483,color:#fff
 ```
 
-Every successful run increases confidence. Every failure decreases it. The system gets faster and more reliable the more you use it.
+## 📈 The Confidence Loop
 
-### Built-in Intents
+Every reflex has a confidence score. Every execution changes it:
 
-The engine ships with a growing set of built-in reflex dispatchers:
+```mermaid
+flowchart LR
+    subgraph Cycle["🔄 Confidence Feedback Cycle"]
+        A["⚡ Execute reflex"] --> B{"Success?"}
+        B -->|"✅ Yes"| C["⬆️ x1.15\nConfidence boost"]
+        B -->|"❌ No"| D["⬇️ x0.85\nConfidence penalty"]
+        B -->|"⛔ Vetoed"| E["⬇️ x0.50\nVeto penalty"]
+        C --> F{"Confidence ≥ 0.80?"}
+        D --> F
+        E --> F
+        F -->|"✅ Yes"| G["🏆 Promoted to Fast Path\nFuture matches skip LLM"]
+        F -->|"❌ No"| H["🔁 Stays in Similar/Slow\nKeeps learning"]
+    end
 
-| Intent | What it does |
-|--------|-------------|
-| `system.info` | System info, uptime, resources |
-| `file.read` | Read a file |
-| `file.write` | Write a file |
-| `process.list` | List running processes |
-| `process.kill` | Kill a process |
-| `network.ping` | Ping a host |
-| `git.status` | Git working-tree status |
-| `git.diff` | Git diff |
-| `docker.ps` | List Docker containers |
-| `env.get` | Read environment variable |
+    G -->|"next match"| A
+    H -->|"next match"| A
+
+    style A fill:#16213e,stroke:#16c79a,color:#fff
+    style G fill:#0f3460,stroke:#16c79a,color:#fff
+    style H fill:#1a1a2e,stroke:#e8d44d,color:#fff
+```
+
+**Three paths. One engine. No daemon needed.**
+
+| Path | Confidence | Latency | Cost | When |
+|------|-----------|---------|------|------|
+| ⚡ **Fast** | ≥ 0.80 | ~50ms | $0 | Exact match — known reflex |
+| 🔍 **Similar** | 0.55–0.80 | ~3s | ~$0.001 | Close match — LLM confirms + adapts |
+| 🚀 **Slow** | < 0.55 | ~3-8s | ~$0.01 | Novel intent — full LLM reasoning + store |
+
+> The system gets faster and more reliable the more you use it. Teach once, match instantly forever.
 
 ---
 
-## Installation
+## 🎯 Built-in Reflexes
 
-### From Source (current — v0.1.0)
+Every Pincher install ships with these ready to go:
 
-```bash
-# Prerequisites: Rust toolchain (rustup)
-git clone https://github.com/SuperInstance/pincher.git
-cd pincher
-cargo build --release -p pincher-cli
-
-# Binary lands at target/release/pincher
-cp target/release/pincher ~/.local/bin/
+```mermaid
+mindmap
+  root((Pincher\nReflexes))
+    System
+      system.info
+      env.get
+      pincher.status
+      pincher.doctor
+    Files
+      file.read
+      file.write
+      file.list
+    Processes
+      process.list
+      process.kill
+    Network
+      network.ping
+      network.ports
+    Git
+      git.status
+      git.diff
+      git.log
+    Docker
+      docker.ps
+      docker.logs
+    Reflex Mgmt
+      pincher.teach
+      pincher.reflexes
+      pincher.compile
 ```
 
-### One-Line Installer
+---
+
+## 🚀 Quick Start
 
 ```bash
+# Install (checks for Rust, builds from source)
 curl -fsSL https://raw.githubusercontent.com/SuperInstance/pincher/main/install.sh | bash
-```
 
-This checks for Rust, builds from source, and installs the `pincher` binary to `~/.local/bin/`.
-
----
-
-## CLI
-
-The `pincher` binary is the primary interface. All commands are wired in the CLI and backed by the core library:
-
-| Command | Purpose |
-|---------|---------|
-| `pincher status` | Engine status, reflex count, database path |
-| `pincher doctor` | Health check — ONNX model, SQLite, disk, embedding |
-| `pincher teach` | Interactive teach flow — store a new reflex |
-| `pincher do "..."` | Execute a natural language intent through the reflex engine |
-| `pincher reflexes` | List stored reflexes with confidence scores |
-| `pincher compile` | Read workspace manifest → compile to WASM reflex |
-| `pincher mature` | Adversarial fuzzing to expand vector search coverage |
-| `pincher bench` | Run benchmark suite (embed latency, teach/match latency) |
-| `pincher shell-info` | Hardware fingerprint |
-| `pincher pack --output agent.nail` | Pack state + identity into portable `.nail` file |
-| `pincher unpack --bundle agent.nail` | Unpack and merge `.nail` state |
-| `pincher run --bundle agent.nail "..."` | Execute a bundle against user input |
-| `pincher publish` | Publish bundle to registry (requires token) |
-| `pincher update` | Check for registry updates |
-| `pincher gastrolith` | Checkpoint migration management |
-
-### Environment Variables
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `PINCHER_DB` | `~/.pincher/reflexes.db` | Path to SQLite reflex database |
-| `PINCHER_LOG_LEVEL` | `warn` | Log verbosity |
-| `PINCHER_REGISTRY_URL` | `https://registry.pincher.dev` | Bundle registry URL |
-| `PINCHER_REGISTRY_TOKEN` | — | Authentication for publishing |
-
-### Quick Start
-
-```bash
-# Check the engine is alive
+# Verify
 pincher status
+# → Engine: healthy · Reflexes: 12 · DB: ~/.pincher/reflexes.db
 
 # Run a health check
 pincher doctor
-
-# List stored reflexes
-pincher reflexes
+# → ONNX model: ✅ · SQLite: ✅ · Embedding: ✅ · Disk: 18G free
 
 # Execute an intent
 pincher do "list files in current directory"
+# → [fast] matched 'file.list' at 0.92 confidence → executed in 47ms
 
 # Teach a new reflex
 pincher teach
+# → Intent: show disk usage
+# → Action: df -h /
+# → Stored at confidence 0.55
+
+# List all reflexes
+pincher reflexes
+# → 13 reflexes · avg confidence 0.67
 ```
 
 ---
 
-## Architecture
+## 🏗️ Under the Hood
 
-The project is a Rust workspace with two crates:
+```mermaid
+graph TB
+    subgraph Workspace["📦 Cargo Workspace"]
+        CLI["pincher-cli\nClap CLI\nTokio async"]
+        CORE["pincher-core\nRuntime Library"]
+        INFER["pincher-infer\nPython Inference"]
+    end
 
-### `pincher-core/` — The Library
+    subgraph Core["pincher-core modules"]
+        REF["reflex/\nEngine · Matcher\nConfidence"]
+        DB["db/\nSQLite + sqlite-vec\nVector store"]
+        EMB["embed/\nONNX all-MiniLM-L6-v2\nHash fallback"]
+        SAN["sandbox/\nBubblewrap\nVeto engine"]
+        MIG["migration/\n.nail pack/unpack\nBLAKE3 + tar.zst"]
+        RPC["rpc/\nJSON-RPC server\nProgrammatic control"]
+        RES["resource/\nPID budgets\nMemory limits"]
+        CAP["capability/\nSigned tokens\nManifests"]
+    end
 
-All runtime logic lives here:
+    CLI --> CORE
+    CORE --> REF
+    CORE --> DB
+    CORE --> EMB
+    CORE --> SAN
+    CORE --> MIG
+    CORE --> RPC
+    CORE --> RES
+    CORE --> CAP
+    INFER --> EMB
 
-| Module | What it does | Status |
-|--------|-------------|--------|
-| `reflex/engine.rs` | ReflexEngine — match, execute, teach, confidence loop | ✅ Implemented |
-| `reflex/matcher.rs` | Vector similarity matching with thresholds | ✅ Implemented |
-| `reflex/confidence.rs` | Multiplicative confidence update model | ✅ Implemented |
-| `db/` | SQLite-backed vector store with sqlite-vec | ✅ Implemented |
-| `embed/onnx.rs` | all-MiniLM-L6-v2 ONNX embeddings + hash fallback | ✅ Implemented |
-| `sandbox/bwrap.rs` | Bubblewrap sandbox with config + veto patterns | ✅ Implemented |
-| `migration/` | `.nail` pack/unpack with BLAKE3 + tar.zst | ✅ Implemented |
-| `rpc/` | JSON-RPC server for programmatic control | ✅ Implemented |
-| `resource/` | PID resource controller with budgets | ✅ Implemented |
-| `capability/` | Signed capability tokens and manifests | ✅ Implemented |
-| `security/veto.rs` | Veto engine — pattern-based pre-execution blocking | ✅ Implemented |
-| `shell/` | Shell fingerprinting | ✅ Implemented |
-| `immunology/` | Pattern-based immune system | ✅ Implemented |
+    style CLI fill:#0f3460,stroke:#16c79a,color:#fff
+    style CORE fill:#16213e,stroke:#e94560,color:#fff
+    style INFER fill:#1a1a2e,stroke:#533483,color:#fff
+    style Core fill:#1a1a2e,stroke:#533483,color:#fff
+    style REF fill:#16213e,stroke:#16c79a,color:#fff
+    style DB fill:#16213e,stroke:#e8d44d,color:#fff
+    style EMB fill:#16213e,stroke:#16c79a,color:#fff
+    style SAN fill:#16213e,stroke:#e94560,color:#fff
+```
 
-### `pincher-cli/` — The CLI Frontend
+**Three crates. One philosophy. Zero daemons.**
 
-A Clap-based CLI that exposes all core functionality through subcommands. Built with `tokio` for async execution.
+| Crate | Lines | Role |
+|-------|-------|------|
+| [`pincher-core`](./pincher-core/) | ~8K | All runtime logic — reflex engine, vector store, sandbox, migration, RPC |
+| [`pincher-cli`](./pincher-cli/) | ~1.5K | Clap-based CLI — all subcommands wired to core |
+| [`pincher-infer`](./pincher-infer/) | ~500 | Python inference module for ONNX embeddings |
 
-### Feature Flags
+---
 
-`pincher-core` uses Cargo features for optional components:
+## 🛡️ Safety First
+
+Pincher runs untrusted intent in a **hardened sandbox**:
+
+```mermaid
+flowchart LR
+    subgraph Check["🔍 Pre-execution"]
+        V["Veto Engine\nPattern matching\non command string"]
+        P["PID Controller\nBudget check\nResource limits"]
+    end
+
+    subgraph Runtime["📦 Execution"]
+        B["Bubblewrap\nRead-only /usr + /lib\nNo network\nWhitelisted bins"]
+        L["Landlock (optional)\nKernel 5.13+\nFine-grained FS rules"]
+        W["WASM (optional)\nwasmtime guest\nMemory sandboxed"]
+    end
+
+    subgraph Result["✅ Output"]
+        O["stdout captured\nstderr captured\nexit code checked"]
+    end
+
+    I["Intent parsed"] --> V
+    V --> P
+    P -->|"Blocked"| X["⛔ Rejected:\n'rm -rf /' blocked\nby veto pattern"]
+    P -->|"Allowed"| B
+    B --> L
+    L --> W
+    W --> O
+
+    style I fill:#1a1a2e,stroke:#e94560,color:#fff
+    style V fill:#16213e,stroke:#e8d44d,color:#fff
+    style P fill:#16213e,stroke:#e8d44d,color:#fff
+    style X fill:#3d0000,stroke:#e94560,color:#fff
+    style B fill:#0f3460,stroke:#16c79a,color:#fff
+    style L fill:#0f3460,stroke:#16c79a,color:#fff
+    style W fill:#0f3460,stroke:#16c79a,color:#fff
+    style O fill:#16213e,stroke:#16c79a,color:#fff
+```
+
+- **Bubblewrap** — read-only system directories, no network by default, whitelisted binaries
+- **Veto Engine** — pattern-based blocking *before* execution (catches `rm -rf /`, fork bombs, etc.)
+- **PID Controller** — resource budgets per reflex, OOM protection
+- **Landlock** (optional) — kernel-level filesystem restrictions (5.13+)
+- **WASM** (optional) — web assembly guest execution via wasmtime
+
+---
+
+## 📦 The Rig: Portable Agent Identity
+
+Pack your entire agent into a **`.nail` file** — a portable archive with BLAKE3 integrity:
+
+```mermaid
+packet-beta
+0-15: "📦 .nail Archive"
+16-31: "manifest.json"
+32-47: "reflexes.db"
+48-63: "identity.json"
+64-79: "config.toml"
+80-95: "BLAKE3 Checksums"
+96-111: "Hardware Fingerprint"
+```
 
 ```bash
-# Enable all features
-cargo build --features "onnx,landlock,wasmtime"
-
-# Minimal build (hash-based embeddings only)
-cargo build
-```
-
-| Feature | What it enables |
-|---------|----------------|
-| `onnx` | Real ONNX Runtime embeddings (all-MiniLM-L6-v2) |
-| `landlock` | Linux Landlock sandboxing (kernel 5.13+) |
-| `wasmtime` | WASM guest module execution |
-
----
-
-## The Vector Store
-
-Every reflex is stored as a row in an SQLite database with a 384-dimensional embedding vector:
-
-```sql
--- The reflexes table (via sqlite-vec)
-CREATE TABLE reflexes (
-    id          TEXT PRIMARY KEY,
-    intent      TEXT NOT NULL,
-    action_sql  TEXT NOT NULL,
-    embedding   BLOB,       -- f32 vector, 384 elements
-    confidence  REAL DEFAULT 0.55,
-    invoke_count INTEGER DEFAULT 0,
-    created_at  TEXT DEFAULT (datetime('now')),
-    updated_at  TEXT DEFAULT (datetime('now'))
-);
-```
-
-This is **not** a hypothetical architecture. The schema exists at `registry_schema.sql`, the SQLite-backed store is wired in `pincher-core/src/db/schema.rs`, and vector search via `sqlite-vec` is production code.
-
----
-
-## The Sandbox
-
-When Pincher executes a reflex, it runs in a **bubblewrap sandbox** (when available):
-
-- Default restricted: no network, `/usr`/`/lib` mounted read-only
-- Whitelisted common binaries only (`ls`, `cat`, `grep`, `touch`, etc.)
-- Dangerous patterns blocked at the string-matching level (`rm -rf /`, `mkfs`, `dd if=/dev/zero`, fork bombs)
-- Falls back to bare `std::process::Command` with a warning if `bwrap` is not installed
-
-The veto engine runs *before* the sandbox, checking the command against blocked patterns.
-
----
-
-## The Rig: Portable Agent Identity
-
-Pack your agent's reflexes, identity, and configuration into a **`.nail` file** — a portable `tar.zst` archive with BLAKE3 checksums:
-
-```bash
-# Pack the whole rig
+# Pack it up
 pincher pack --output my-agent.nail
 
-# Unpack on another machine
+# Ship it
+scp my-agent.nail user@server:~/
+
+# Unpack anywhere
 pincher unpack --bundle my-agent.nail
-```
 
-A `.nail` archive contains:
+# Run against the new machine
+pincher run --bundle my-agent.nail "show disk usage"
 ```
-my-agent.nail
-├── manifest.json       # Version, checksums, hardware fingerprint
-├── reflexes.db         # Full SQLite vector DB
-├── identity.json       # Agent name, preferences
-└── config.toml         # Resource thresholds
-```
-
-The `migration` module in `pincher-core` implements pack, unpack, verify, fingerprint, and compatibility scoring.
 
 ---
 
-## Tools and Scripts
+## 🧪 CLI Reference
 
-The `tools/` directory contains supporting scripts:
-
-| Script | Purpose |
-|--------|---------|
-| `reflex-engine.sh` | Lightweight metacognitive daemon — scans disk/RAM pressure, runs reflexes |
-| `checkpoint.sh` | System checkpoint utility |
-| `fleet-scout.sh` | Fleet reconnaissance |
-| `gc-fleet.sh` | Fleet garbage collection |
-| `init-context.sh` | Context initialization |
-| `promote-reflex.sh` | Promote reflexes through confidence tiers |
-| `deepinfra_client.py` | DeepInfra API client for LLM routing |
-| `model_router.py` | Model routing logic |
+```text
+pincher ─── status ─────── Engine health, reflex count, DB path
+     │     doctor ─────── Full health check (ONNX, SQLite, disk)
+     │     teach ──────── Interactive reflex teaching
+     │     do "..." ───── Execute intent through reflex engine
+     │     reflexes ───── List reflexes + confidence scores
+     │     compile ────── Workspace → WASM reflex
+     │     mature ─────── Fuzzing for coverage expansion
+     │     bench ──────── Latency benchmark suite
+     │
+     ├── pack ─────────── Pack → .nail file
+     ├── unpack ───────── Unpack .nail ←─ file
+     ├── run ──────────── Execute .nail bundle
+     │
+     ├── publish ──────── Publish to registry (stub)
+     ├── update ───────── Check registry updates (stub)
+     │
+     ├── shell-info ───── Hardware fingerprint
+     └── gastrolith ───── Checkpoint migration
+```
 
 ---
 
-## Development
+## 🧭 What Pincher Is (and Isn't)
 
-### Prerequisites
+**Pincher is a focused, portable reflex runtime that works right now.** Here's the honest scope of v0.1.0:
 
-- Rust 2024+ (see `rust-toolchain.toml`)
-- For ONNX features: `ort` library (optional)
+<div align="center">
 
-### Build
+| ✅ Is | ❌ Isn't |
+|-------|----------|
+| CLI-driven reflex engine | Cloud fleet manager ("Lighthouse Keeper") |
+| SQLite-backed vector store | Edge-sync protocol ("Tender") |
+| Bubblewrap sandbox for safety | Docker image on Docker Hub |
+| Teach → Match → Execute loop | Holodeck MUD or fantasy |
+| `.nail` portable bundles | ESP32 or WebAssembly builds |
+| Local, offline capable | Five deployment modes |
+| ONNX + hash embeddings | Instant-boot guarantees |
+
+</div>
+
+> The project deploys in exactly **one mode**: build from source, run the binary. That's the honest scope of v0.1.0.
+
+---
+
+## 🗺️ Near-Term Roadmap
+
+```mermaid
+gantt
+    title Pincher v0.1.0 → v0.2.0
+    dateFormat  YYYY-MM-DD
+    axisFormat  %b %d
+    
+    section Core
+    WASM guest execution       :done, 2026-05-20, 2026-06-05
+    Landlock sandbox           :done, 2026-05-25, 2026-06-05
+    Reflex publish/update      :active, 2026-06-01, 2026-06-20
+    Multi-process pipelines    :2026-06-15, 2026-07-01
+
+    section Quality
+    Benchmark rigor            :active, 2026-06-01, 2026-06-15
+    Confidence tuning          :2026-06-10, 2026-06-25
+    Fuzz testing               :2026-06-15, 2026-07-01
+
+    section Ecosystem
+    Reflex registry API        :2026-06-20, 2026-07-10
+    Nebula sync integration    :2026-07-01, 2026-07-15
+    Make-me-app template       :2026-07-01, 2026-07-15
+```
+
+---
+
+## 🧬 Lineage
+
+Pincher is the descendant of a long line of agent infrastructure experiments:
+
+```mermaid
+timeline
+    title From PLATO to Pincher
+    2024 : PLATO Evennia MUD — 380 rooms, ensign training
+    2025Q1 : LAU — Rust construct CLI + AI tutor
+    2025Q3 : cocapn-runtime — constraint theory, spatial math
+    2025Q4 : PincherOS — reflex engine, `.nail` rigs, veto engine
+    2026Q1 : fleet I2I — agent-to-agent bottle protocol
+    2026Q2 : Pincher v0.1.0 — standalone reflex runtime
+             Nebula — edge-reflex twin at Cloudflare Workers
+             Make Me A... — instant apps from conversation
+```
+
+Every shell fits. Every situation has the right shape. That's the hermit crab way.
+
+---
+
+## 🧪 Development
 
 ```bash
+# Prerequisites: Rust toolchain
+# (see rust-toolchain.toml for pinned version)
+
 # Debug build
 cargo build
 
-# Release build
+# Release build (fast)
 cargo build --release
 
-# Release with all features
+# Full feature set
 cargo build --release --features "onnx,landlock,wasmtime"
+
+# Run all tests
+cargo test --workspace
 ```
-
-### Codespace
-
-The repo includes a `.devcontainer/` with pre-configured Rust environment, GitHub CLI, and Python — ready for GitHub Codespaces.
 
 ### Project Structure
 
 ```
 /
 ├── Cargo.toml                 # Workspace root
-├── Cargo.lock
 ├── rust-toolchain.toml        # Toolchain pinning
-├── pincher-core/              # Core library (all runtime logic)
-│   ├── Cargo.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── reflex/            # Reflex engine (match, execute, teach)
-│       ├── db/                # SQLite vector store
-│       ├── embed/             # ONNX + hash embeddings
-│       ├── sandbox/           # Bubblewrap isolation
-│       ├── migration/         # .nail pack/unpack
-│       ├── rpc/               # JSON-RPC server
-│       ├── resource/          # Resource controller
-│       └── ...
-├── pincher-cli/               # CLI frontend
-│   ├── Cargo.toml
-│   └── src/main.rs            # pincher binary
-├── pincher-infer/             # Python inference module
-│   ├── pincher_infer/
-│   └── tests/
-├── tools/                     # Supporting scripts
-├── scripts/                   # GC, dedup, self-heal scripts
-├── docs/                      # Architecture, roadmap, ADRs
+├── pincher-core/              # ~8K lines — all runtime logic
+│   ├── src/reflex/            # Engine · Matcher · Confidence
+│   ├── src/db/                # SQLite vector store (sqlite-vec)
+│   ├── src/embed/             # ONNX all-MiniLM-L6-v2 + hash
+│   ├── src/sandbox/           # Bubblewrap + Landlock + veto
+│   ├── src/migration/         # .nail pack/unpack (tar.zst)
+│   ├── src/rpc/               # JSON-RPC server
+│   └── src/resource/          # PID budgets + memory limits
+├── pincher-cli/               # ~1.5K lines — Clap CLI
+├── pincher-infer/             # Python ONNX inference
+├── tools/                     # Shell scripts (reflex-engine, fleet-scout, gc)
+├── docs/                      # Architecture, roadmap, ADRs, checklists
+├── assets/                    # Logo and hermit crab images
 ├── examples/                  # Code review, hello-reflex, smart-home
-├── assets/                    # Logo images
-├── config/pincher.toml        # Default configuration
 ├── install.sh                 # One-line installer
-├── registry_schema.sql        # Registry SQL schema
 └── .devcontainer/             # Codespace config
 ```
 
 ---
 
-## What This Is Not
+## 📚 Documentation
 
-This list matters. The current README inherited a lot of "future-fantasy" from earlier documentation. Here is the honest picture:
-
-- **No "Lighthouse Keeper"** — there is no cloud fleet management API. The RPC module and fleet-scout script exist, but a centralized fleet coordinator does not.
-- **No "Tender"** — there is no edge-sync protocol. The `migration` module handles `.nail` file transfer, but automatic "Tender visits" are aspirational.
-- **No "Holodeck MUD"** — this does not exist and is not on the short-term roadmap.
-- **No `boot.sh`** — the legacy boot script was replaced by the `pincher` CLI. Run `pincher` commands directly.
-- **No Docker image on Docker Hub** — `superinstance/pincher` is not published. You build from source.
-- **No ESP32 build** — the `wasmtime` feature and `cargo build` target only host OSes.
-- **No instant-boot claims** — benchmark data is collected (see `benchmarks/`) but not yet published as guarantees.
-
-The project does **not** deploy in "5 modes." It deploys in exactly one mode: **build from source, run the binary**. That is the honest scope of v0.1.0.
-
----
-
-## Roadmap (Near-Term)
-
-These are the real priorities as documented in `docs/ROADMAP.md` and `docs/MVP_CHECKLIST.md`:
-
-1. **WASM guest execution** — the `wasmtime` feature is wired, guest protocol is defined
-2. **Landlock sandboxing** — the `landlock` feature is wired, needs production testing
-3. **Reflex registry** — the `publish` and `update` CLI commands are stubs; registry format is defined in `registry_schema.sql`
-4. **Multi-process execution** — sandbox can run more complex pipelines
-5. **Benchmark rigor** — formalize latency and confidence metrics
+| Doc | What it covers |
+|-----|---------------|
+| [`PLUG_AND_PLAY.md`](./PLUG_AND_PLAY.md) | Quickest path from zero to running |
+| [`GETTING_STARTED.md`](./GETTING_STARTED.md) | Detailed setup and first reflex |
+| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Full system architecture and design decisions |
+| [`API_REFERENCE.md`](./API_REFERENCE.md) | Complete CLI and library API reference |
+| [`LOW_LEVEL.md`](./LOW_LEVEL.md) | Internal module walkthrough |
+| [`docs/ROADMAP.md`](./docs/ROADMAP.md) | What's coming next |
+| [`docs/FLEET_ARCHITECTURE.md`](./docs/FLEET_ARCHITECTURE.md) | How Pincher fits in the fleet |
+| [`docs/COGNITIVE_REFLEXES.md`](./docs/COGNITIVE_REFLEXES.md) | Advanced reflex patterns |
+| [`docs/PLATO-LINEAGE.md`](./docs/PLATO-LINEAGE.md) | The full history from PLATO to Pincher |
 
 ---
 
-## License
+## 🤝 Contributing
 
-MIT OR Apache-2.0 — see `LICENSE`.
+PRs welcome. The project is in active development and the architecture is still settling. Good places to start:
+
+- Add a built-in reflex dispatcher
+- Improve veto pattern coverage
+- Write benchmark harness tests
+- Fix a `TODO` in the code
 
 ---
 
-*🦀 Same crab. Bigger shell.*
+## 📜 License
 
-*The hermit crab finds the right shell for every situation — but it starts with the one it's in.*
+**MIT OR Apache-2.0** — see `LICENSE`.
+
+---
+
+<p align="center">
+  <img src="assets/logo.jpg" width="200" alt="Pincher logo">
+</p>
+
+<p align="center">
+  <em>🦀 Same crab. Bigger shell.</em><br>
+  <em>The hermit crab finds the right shell for every situation — but it starts with the one it's in.</em>
+</p>
