@@ -90,8 +90,9 @@ disconnected_list=""
 
 for repo in "${TERNARY_CRATES[@]}"; do
     # Check if Cargo.toml in the repo has 'ternary-types' as a dependency
-    toml_url="https://raw.githubusercontent.com/SuperInstance/$repo/master/Cargo.toml"
-    if curl -sL --max-time 5 "$toml_url" 2>/dev/null | grep -q 'ternary-types'; then
+    # Uses gh CLI API for reliability (avoids CDN caching issues)
+    toml_content=$(gh api repos/SuperInstance/$repo/contents/Cargo.toml --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || echo '')
+    if echo "$toml_content" | grep -q 'ternary-types'; then
         echo "  ✅ $repo — connected"
         connected=$((connected + 1))
     else
