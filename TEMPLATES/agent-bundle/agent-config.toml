@@ -1,0 +1,31 @@
+# ════════════════════════════════════════════════════════
+# pincher Agent Configuration Template
+# ════════════════════════════════════════════════════════
+
+[agent]
+name = "my-agent"
+version = "1.0.0"
+description = "A versatile pincher agent"
+
+[reflex]
+match_threshold = 0.80
+confirm_threshold = 0.55
+max_reflexes = 1000
+
+[embedding]
+backend = "onnx"       # "onnx" | "hash"
+model = "all-MiniLM-L6-v2"
+
+[sandbox]
+enabled = true
+backend = "bubblewrap"  # "bubblewrap" | "landlock" | "none"
+readonly_paths = ["/usr", "/lib", "/etc"]
+allow_network = false
+
+[limits]
+max_executions_per_minute = 60
+max_memory_mb = 256
+max_disk_mb = 1024
+
+[capabilities]
+allowed_commands = ["ls", "cat", "grep", "find", "echo", "date", "whoami", "df", "ps", "uptime"]

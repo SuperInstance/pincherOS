@@ -1,0 +1,42 @@
+# ════════════════════════════════════════════════════════
+# Read-Only Security Profile Template
+# ════════════════════════════════════════════════════════
+
+[capability]
+name = "read-only"
+version = "1.0"
+description = "Read-only file inspection only"
+
+[permissions]
+# Only these commands are whitelisted
+commands = ["ls", "cat", "head", "tail", "grep", "find", "wc", "echo", "date", "pwd", "which"]
+
+# File access restrictions
+files = ["read"]  # read-only
+network = false
+system = false
+
+[limits]
+max_executions = 500
+max_memory_mb = 128
+max_disk_mb = 64
+
+# Blocklist patterns (matched against command string)
+veto_patterns = [
+    "rm",
+    "mkfs",
+    "dd",
+    "chmod",
+    "chown",
+    "mv",
+    "cp",
+    ">",
+    ">>",
+    "| tee",
+    "sudo",
+    "su ",
+    "passwd",
+    "kill",
+    "shutdown",
+    "reboot",
+]

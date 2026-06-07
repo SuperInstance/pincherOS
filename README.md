@@ -8,6 +8,62 @@
 
 ---
 
+> 🚀 **The Hook:**  
+> *A reflex engine for AI agents — intent → action in <50ms, zero dollars, every time, without asking an LLM.*
+
+## 📐 The la-link (Architecture)
+
+```
+                     ┌──────────────────────────────────────┐
+                     │            pincher                    │
+                     │   ┌──────────────────────────────┐   │
+You say ────▶ [1] ──▶│   │  Reflex Engine               │   │
+something     Embed  │   │  ┌─────┐   ┌────────┐       │   │
+             (384D)  │   │  │Match│──▶│Execute  │       │   │
+                     │   │  │≥0.80│   │Directly │       │   │
+                     │   │  └─────┘   └────────┘       │   │
+                     │   │  ┌─────┐   ┌────────┐       │   │
+                     │   │  │Match│──▶│Confirm  │       │   │
+                     │   │  │0.55-│   │+ Execute│       │   │
+                     │   │  │0.80 │   └────────┘       │   │
+                     │   │  └─────┘   ┌────────┐       │   │
+                     │   │  ┌─────┐   │LLM     │       │   │
+                     │   │  │Match│──▶│Compiles│       │   │
+                     │   │  │<0.55│   │New     │       │   │
+                     │   │  └─────┘   │Reflex  │       │   │
+                     │   │            └────────┘       │   │
+                     │   │  ┌──────────────────────┐   │   │
+                     │   │  │ Veto Engine (SAEP)   │   │   │
+                     │   │  │ Security → Sandbox   │   │   │
+                     │   │  └──────────────────────┘   │   │
+                     │   └──────────────────────────────┘   │
+                     │              │                       │
+                     │              ▼                       │
+                     │   ┌──────────────────────────────┐   │
+                     │   │    Reflex Database           │   │
+                     │   │    (SQLite + sqlite-vec)    │   │
+                     │   └──────────────────────────────┘   │
+                     │              │                       │
+                     │              ▼                       │
+                     │   ┌──────────────────────────────┐   │
+                     │   │    .nail Bundle               │   │
+                     │   │    (Portable Agent State)     │   │
+                     │   └──────────────────────────────┘   │
+                     └──────────────────────────────────────┘
+```
+
+**Three-tier compute:**
+
+```
+Fast  (ms):   Embedding match + reflex execution (no LLM)
+Medium (s):   Confirmation + optional execution (low confidence)
+Slow   (s):   LLM compilation → new reflex (learning event)
+```
+
+---
+
+## 🧠 What Is a Reflex?
+
 Here's what a reflex is.
 
 You touch a hot stove. Your hand pulls back before your brain knows why. The spinal cord handled it. No deliberation, no committee, no latency budget meeting. By the time the cortex hears about it, the hand is already safe.
@@ -24,7 +80,7 @@ And when it encounters something it hasn't seen before — something that doesn'
 
 ---
 
-## Why This Exists
+## 🤔 Why This Exists
 
 Most agent systems have a latency problem masquerading as an architecture problem.
 
@@ -38,7 +94,7 @@ This isn't caching. Caching returns the same answer to the same question. Pinche
 
 ---
 
-## How It Works
+## 🔄 How It Works
 
 One loop. Four outcomes.
 
@@ -67,7 +123,7 @@ That's not a metaphor. That's literally the architecture. The hot-stove reflex w
 
 ---
 
-## The `.nail` File — Your Agent, Portable
+## 📦 The `.nail` File — Your Agent, Portable
 
 A hermit crab carries its shell wherever it goes. Pincher carries its reflexes the same way.
 
@@ -93,7 +149,7 @@ We followed that thread. It led to [character-build](https://github.com/SuperIns
 
 ---
 
-## Installation
+## 🛠️ Installation
 
 ```bash
 # Build from source (the honest way)
@@ -108,7 +164,7 @@ curl -fsSL https://raw.githubusercontent.com/SuperInstance/pincher/main/install.
 
 ---
 
-## First Five Minutes
+## 🚀 Quickstart — First Five Minutes
 
 ```bash
 # Is it alive?
@@ -134,7 +190,7 @@ Every `pincher do` is a learning event. If the intent matches an existing reflex
 
 ---
 
-## The CLI
+## ⌨️ The CLI
 
 | Command | What It Does |
 |---------|-------------|
@@ -155,7 +211,7 @@ Every `pincher do` is a learning event. If the intent matches an existing reflex
 
 ---
 
-## The Vector Store
+## 🗄️ The Vector Store
 
 Every reflex lives in SQLite, indexed by its embedding vector:
 
@@ -176,7 +232,7 @@ This is production code, not a schema sketch. The database lives at `~/.pincher/
 
 ---
 
-## Security
+## 🔒 Security
 
 Pincher runs untrusted commands. It takes that seriously.
 
@@ -188,7 +244,7 @@ Pincher runs untrusted commands. It takes that seriously.
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
 Rust workspace, two crates:
 
@@ -213,7 +269,7 @@ pincher-core/src/
 └── dynamics/     # Carapace dynamics
 ```
 
-### Feature Flags
+#### Feature Flags
 
 | Flag | What It Unlocks |
 |------|----------------|
@@ -225,7 +281,7 @@ Without any features, pincher uses hash-based embedding fallback. It works. It's
 
 ---
 
-## Where It Lives in the Ecosystem
+## 🔌 Where It Lives in the Ecosystem
 
 Pincher is layer 2 of the [SuperInstance five-layer stack](https://github.com/SuperInstance/SuperInstance):
 
@@ -243,7 +299,7 @@ The cortex teaches the spinal cord. The spinal cord gets faster. Learning become
 
 ---
 
-## What Connects To This
+## 🔗 What Connects To This
 
 - [**agent-sync**](https://github.com/SuperInstance/agent-sync) — teaches agents *when* to fire their reflexes. Timing > quality. The reflex is the lick. The sync is the moment.
 - [**character-build**](https://github.com/SuperInstance/character-build) — reads `.nail` bundles as RPG character sheets. Stats, classes, abilities — all derived from reflex data.
@@ -254,7 +310,7 @@ The cortex teaches the spinal cord. The spinal cord gets faster. Learning become
 
 ---
 
-## What Pincher Is Not
+## ⚠️ What Pincher Is Not
 
 Honesty matters more than marketing:
 
@@ -266,7 +322,7 @@ Honesty matters more than marketing:
 
 ---
 
-## The Hermit Crab
+## 🦀 The Hermit Crab
 
 A hermit crab is born soft. No shell. No armor. Just a body that needs protection and an instinct to find it.
 
@@ -280,7 +336,21 @@ Same crab. Bigger shell.
 
 ---
 
-## License
+## 📚 Knowledge Path
+
+| Path | What You'll Learn | Start Here |
+|------|-------------------|------------|
+| 🧭 **A: Reflex Basics** | What's a reflex, how matching works | [`TUTORIALS.md`](./TUTORIALS.md#-tutorial-1-i-want-to-teach-my-first-reflex) |
+| 🧭 **B: CLI Power** | All pincher commands and flags | [`pincher-cli/src/main.rs`](./pincher-cli/src/main.rs) |
+| 🧭 **C: Embeddings** | ONNX vs hash fallback | [`pincher-core/src/embed/`](./pincher-core/src/embed/) |
+| 🧭 **D: Sandbox Security** | Bubblewrap, veto, capability tokens | [`pincher-core/src/security/`](./pincher-core/src/security/) |
+| 🧭 **E: Building Agents** | Create portable agent `.nail` bundles | [`TEMPLATES/ONBOARDING.md`](./TEMPLATES/ONBOARDING.md) |
+| 🧭 **F: API Reference** | Full API docs | [`API_REFERENCE.md`](./API_REFERENCE.md) |
+| 🧭 **G: Architecture** | Deep system design | [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
+
+---
+
+## 📄 License
 
 MIT OR Apache-2.0
 
