@@ -29,7 +29,7 @@ pub fn inject_nan_random(
 ) -> Vec<(usize, usize, usize)> {
     let mut rng = fastrand::Rng::new();
     let mut coords = Vec::with_capacity(count);
-    let shape = tensor.shape();
+    let shape = tensor.shape().to_vec();
     for _ in 0..count {
         let s = rng.usize(0..shape[0]);
         let f = rng.usize(0..shape[1]);
@@ -47,7 +47,7 @@ pub fn inject_inf_random(
 ) -> Vec<(usize, usize, usize)> {
     let mut rng = fastrand::Rng::new();
     let mut coords = Vec::with_capacity(count);
-    let shape = tensor.shape();
+    let shape = tensor.shape().to_vec();
     for _ in 0..count {
         let s = rng.usize(0..shape[0]);
         let f = rng.usize(0..shape[1]);

@@ -63,8 +63,6 @@ pub mod chaos;
 pub mod engine;
 pub mod error;
 pub mod mock_matrix;
-pub mod mock_room;
-pub mod mock_veto;
 pub mod types;
 
 // ── Prelude ──────────────────────────────────────────────────────────
