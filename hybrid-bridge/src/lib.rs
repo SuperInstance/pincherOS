@@ -60,9 +60,12 @@
 
 pub mod bridge;
 pub mod chaos;
+pub mod cli;
+pub mod datafeed;
 pub mod engine;
 pub mod error;
 pub mod mock_matrix;
+pub mod ternary_bridge;
 pub mod types;
 
 // ── Prelude ──────────────────────────────────────────────────────────
@@ -74,6 +77,7 @@ pub mod prelude {
         DefaultVetoEngine, HybridConfig, HybridEngine, HybridEngineImpl, MatrixEngine, RoomAgent,
         VetoEngine,
     };
+    pub use crate::datafeed::{CsvFileFeed, MarketDataFeed, StockTick};
     pub use crate::error::{HybridError, HybridResult};
     pub use crate::types::{
         detect_non_finite, mask_non_finite, FeatureSuggestion, FinalPosition, GovernanceLayer,
@@ -89,6 +93,7 @@ pub use engine::{
     DefaultVetoEngine, HybridConfig, HybridEngine, HybridEngineImpl, MatrixEngine as MatrixEngineTrait,
     RoomAgent as RoomAgentTrait, VetoEngine as VetoEngineTrait,
 };
+pub use datafeed::{CsvFileFeed, MarketDataFeed, StockTick};
 pub use error::{HybridError, HybridResult};
 pub use types::{
     detect_non_finite, mask_non_finite, FeatureSuggestion, FinalPosition, GovernanceLayer,
